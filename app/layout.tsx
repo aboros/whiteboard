@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { SupabaseProvider } from "@/components/providers/SupabaseProvider";
 import { Header } from "@/components/layout/Header";
@@ -6,6 +6,12 @@ import { Header } from "@/components/layout/Header";
 export const metadata: Metadata = {
   title: "Whiteboard",
   description: "Collaborative whiteboard application",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
 };
 
 export default function RootLayout({
