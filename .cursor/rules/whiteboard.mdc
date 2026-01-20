@@ -15,6 +15,13 @@ alwaysApply: true
 - **State Management**: React hooks + Supabase Realtime
 - **Deployment**: Docker with multi-stage builds
 
+### Security & Dependency Management
+
+- **Always use latest patched versions** - Check for security vulnerabilities regularly using `npm audit`
+- **Priority: Security updates** - When npm warns about security vulnerabilities (especially critical/high severity), update immediately
+- **Current stable**: Next.js 14.2.35+ (patches CVE-2025-55184 and CVE-2025-55183)
+- **Version strategy**: Use exact versions for critical dependencies to ensure reproducible builds and security patches
+
 ## MCP Server Integration
 
 - **Supabase MCP**: Use `mcp_whiteboard-supabase_*` tools for database operations, migrations, and admin tasks instead of manual SQL

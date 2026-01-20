@@ -9,7 +9,7 @@
         "testStrategy": "Verify Next.js starts without errors: npm run dev; Check Tailwind classes apply correctly; Confirm all dependencies resolve without version conflicts; Test build: npm run build",
         "priority": "high",
         "dependencies": [],
-        "status": "pending",
+        "status": "done",
         "subtasks": [
           {
             "id": 1,
@@ -17,7 +17,7 @@
             "description": "Run npx create-next-app@14.2.15 to set up whiteboard-app with TypeScript, Tailwind CSS, ESLint, and App Router.",
             "dependencies": [],
             "details": "Execute: npx create-next-app@14.2.15 whiteboard-app --typescript --tailwind --eslint --app; cd whiteboard-app; Verify project starts with npm run dev and no errors.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Run npm run dev; confirm server starts at localhost:3000 without TypeScript or Tailwind errors."
           },
           {
@@ -27,8 +27,8 @@
             "dependencies": [
               1
             ],
-            "details": "Run: npm i @excalidraw/excalidraw@0.18.0 @supabase/supabase-js@2.45.4 @supabase/ssr@0.5.1 use-debounce@10.0.1 lucide-react@0.441.0; npm i -D @types/node typescript; Check package.json and node_modules.",
-            "status": "pending",
+            "details": "Run: npm i @excalidraw/excalidraw@0.18.0 @supabase/supabase-js@2.45.4 @supabase/ssr@0.5.1 use-debounce@10.0.1 lucide-react@0.441.0; npm i -D @types/node typescript; Check package.json and node_modules.\n<info added on 2026-01-20T15:53:57.026Z>\n**Security Fix Applied (2025-01-XX)**\n\nUpgraded Next.js from 14.2.15 to 14.2.35 to fix critical security vulnerabilities:\n- CVE-2025-55184: Denial-of-service vulnerability in React Server Components\n- CVE-2025-55183: Source code exposure vulnerability in React Server Components\n\n**Changes:**\n- Updated `next` package from 14.2.15 → 14.2.35\n- Updated `eslint-config-next` from 14.2.15 → 14.2.35 (to match Next.js version)\n- Verified all dependencies install correctly\n- Confirmed build succeeds without errors\n- Tested dev server starts successfully\n- Verified no Next.js security vulnerabilities remain\n\n**Verification:**\n- ✅ `npm ls next` confirms 14.2.35 installed\n- ✅ `npm audit` shows no Next.js vulnerabilities\n- ✅ `npm run build` succeeds\n- ✅ `npm run dev` starts without errors\n- ✅ No deprecation warnings for Next.js in npm install output\n\nThe security vulnerability has been completely resolved. All functionality remains intact.\n</info added on 2026-01-20T15:53:57.026Z>",
+            "status": "done",
             "testStrategy": "Run npm ls to verify no version conflicts; npm run build succeeds without dependency errors."
           },
           {
@@ -39,7 +39,7 @@
               1
             ],
             "details": "Update tailwind.config.js: module.exports = {darkMode: 'class', ...}; mkdir components lib app/board app/login app/signup; touch .env.local with NEXT_PUBLIC_SUPABASE_URL= and NEXT_PUBLIC_SUPABASE_ANON_KEY= placeholders.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Verify Tailwind dark mode toggles via class; npm run dev shows no config errors; structure matches PRD spec."
           }
         ]
@@ -572,7 +572,7 @@
     ],
     "metadata": {
       "created": "2026-01-20T15:29:39.230Z",
-      "updated": "2026-01-20T15:29:39.230Z",
+      "updated": "2026-01-20T16:00:15.720Z",
       "description": "Tasks for master context"
     }
   }
