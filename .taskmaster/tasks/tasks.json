@@ -1,0 +1,159 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Project Setup and Dependencies",
+        "description": "Initialize Next.js 14+ project with TypeScript, Tailwind CSS, and all required dependencies per tech stack",
+        "details": "npx create-next-app@14.2.15 whiteboard-app --typescript --tailwind --eslint --app; cd whiteboard-app; Install: npm i @excalidraw/excalidraw@0.18.0 @supabase/supabase-js@2.45.4 @supabase/ssr@0.5.1 use-debounce@10.0.1 lucide-react@0.441.0; npm i -D @types/node typescript; Create project structure matching PRD; Configure tailwind.config.js with dark mode; Add .env.local with NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY placeholders",
+        "testStrategy": "Verify Next.js starts without errors: npm run dev; Check Tailwind classes apply correctly; Confirm all dependencies resolve without version conflicts; Test build: npm run build",
+        "priority": "high",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 2,
+        "title": "Supabase Database Schema and RLS",
+        "description": "Create boards table with exact schema from PRD including RLS policies and triggers",
+        "details": "In Supabase SQL Editor, run exact migration SQL from PRD: CREATE EXTENSION, boards table with jsonb columns, indexes, RLS policies for authenticated users CRUD, update_updated_at trigger/function; Enable Realtime on boards table; Verify policies allow all authenticated users full access as specified",
+        "testStrategy": "Use Supabase SQL Editor to INSERT/SELECT/UPDATE/DELETE as authenticated user; Test RLS blocks anonymous access; Verify updated_at auto-updates; Confirm realtime subscriptions work",
+        "priority": "high",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 3,
+        "title": "Supabase Client Setup",
+        "description": "Create browser and server Supabase clients with proper SSR handling",
+        "details": "lib/supabase/client.ts: export createClient() using createBrowserClient from @supabase/ssr@0.5.1; lib/supabase/server.ts: export createServerClient() using createServerClient; lib/supabase/middleware.ts: createMiddlewareClient(); Update root layout.tsx to wrap with SupabaseProvider; Use process.env.NEXT_PUBLIC_SUPABASE_URL/ANON_KEY",
+        "testStrategy": "Test client initialization in browser console; Verify server actions can query boards table; Check no hydration errors on SSR pages",
+        "priority": "high",
+        "dependencies": [
+          1
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 4,
+        "title": "Authentication System",
+        "description": "Implement complete auth flow with login/signup/logout and middleware protection",
+        "details": "Create components/auth/AuthForm.tsx with email/password validation (8+ chars, RFC5322 email); app/login/page.tsx and app/signup/page.tsx using server actions; Implement middleware.ts protecting all routes except /login /signup; Add logout button to layout; Use supabase.auth.signUp/signInWithPassword/getSession; Persist session with cookies via @supabase/ssr",
+        "testStrategy": "E2E: signup→login→access dashboard→logout→blocked from protected routes; Test validation errors inline; Verify session persists on refresh; Test invalid credentials show specific errors",
+        "priority": "high",
+        "dependencies": [
+          1,
+          2,
+          3
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 5,
+        "title": "Board Management CRUD",
+        "description": "Implement server actions and dashboard for board listing/creation/deletion/slug generation",
+        "details": "lib/actions/boards.ts: getBoards(), getBoard(slug), createBoard(name) with slugify(name + '-' + Date.now()), updateBoard(), deleteBoard(); lib/utils/slug.ts: implement slugify with unicode handling and duplicate suffix; app/page.tsx: dashboard with BoardList; components/boards/BoardCard.tsx, CreateBoardDialog.tsx with validation (1-100 chars); Navigation to /board/[slug]",
+        "testStrategy": "Create board→verify list updates→delete→confirm removed; Test duplicate names get unique slugs; Test validation prevents empty names; 404 on invalid slug redirects to dashboard",
+        "priority": "high",
+        "dependencies": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 6,
+        "title": "Excalidraw Canvas Integration",
+        "description": "Dynamic client-side Excalidraw integration with board data loading",
+        "details": "app/board/[slug]/page.tsx: fetch board data server-side, dynamic import Excalidraw; components/canvas/ExcalidrawWrapper.tsx: 'use client'; const Excalidraw = dynamic(()=>import('@excalidraw/excalidraw').then(m=>m.Excalidraw), {ssr:false, loading:()=>'Loading canvas...'}); Pass initialState={{elements:board.elements, appState:board.app_state}}; Full viewport responsive CSS",
+        "testStrategy": "Load existing board→verify elements render; Test all Excalidraw tools work; No SSR hydration errors; Large boards (1000+ elements) load <5s; Error handling for corrupted data",
+        "priority": "high",
+        "dependencies": [
+          1,
+          3,
+          4,
+          5
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 7,
+        "title": "Auto-Save Functionality",
+        "description": "Debounced auto-save of elements and appState to database",
+        "details": "In ExcalidrawWrapper: useDebounceCallback(saveToDb, 5000); const onChange=(elements, appState)=>{saveToDb(elements, appState);}; async saveToDb=async(elements, appState)=>{await updateBoard(slug, {elements, app_state:appState})}; Track dirty state for save indicator; Implement retry queue (3 attempts) with exponential backoff; Network reconnect handling",
+        "testStrategy": "Draw→wait 5s→check network tab for save; Refresh→verify drawing persists; Test rapid changes don't spam API; Simulate network failure→verify retry then notification",
+        "priority": "high",
+        "dependencies": [
+          1,
+          3,
+          5,
+          6
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 8,
+        "title": "Real-time Collaboration",
+        "description": "Supabase Realtime broadcast for multi-user drawing sync",
+        "details": "In ExcalidrawWrapper: const channel = supabase.channel(`board:${slug}`); channel.on('broadcast', {event:'scene-update'}, ({payload})=>excalidrawAPI.updateScene(payload)); onChange=(elements,appState)=>{channel.send({type:'broadcast', event:'scene-update', payload:{elements,appState}})}; channel.subscribe(); On reconnect: fetch latest from DB; Implement last-write-wins per element ID",
+        "testStrategy": "2 browser windows same board→draw in one→appears in other <500ms; Simultaneous edits→no data loss; Refresh→syncs correctly; Network disconnect→reconnects and syncs",
+        "priority": "high",
+        "dependencies": [
+          1,
+          2,
+          3,
+          6,
+          7
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 9,
+        "title": "Presence Indicators",
+        "description": "Real-time user presence avatars on board page",
+        "details": "Extend realtime channel: channel.on('presence', {event:'sync'}, ()=>setOnlineUsers(Object.values(channel.presenceState()).flat())); On subscribe: channel.track({user_id:user.id, email:user.email, online_at:new Date().toISOString()}); components/canvas/PresenceAvatars.tsx: display emails in corner; Handle multiple tabs as single user",
+        "testStrategy": "Open board→shows self; 2nd user joins→both visible; Close tab→removes instantly; Network drop→presence updates correctly",
+        "priority": "medium",
+        "dependencies": [
+          1,
+          3,
+          4,
+          8
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 10,
+        "title": "Deployment Configuration",
+        "description": "Docker setup, health checks, and production configuration",
+        "details": "Dockerfile: multi-stage FROM node:20-alpine, COPY ., npm ci --only=production, npm run build, CMD ['npm', 'start']; docker-compose.yml with app service port 3000; app/api/health/route.ts: GET returns {status:'ok', timestamp:new Date().toISOString()}; Update README.md with complete setup instructions, env vars, Supabase migration steps",
+        "testStrategy": "docker build -t whiteboard .; docker run -p3000:3000 whiteboard; curl localhost:3000/api/health; Test full flow in Docker container; Verify health endpoint for readiness probes",
+        "priority": "medium",
+        "dependencies": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "status": "pending",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "created": "2026-01-20T15:29:39.230Z",
+      "updated": "2026-01-20T15:29:39.230Z",
+      "description": "Tasks for master context"
+    }
+  }
+}
