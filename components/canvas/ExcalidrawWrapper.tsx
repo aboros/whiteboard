@@ -90,6 +90,12 @@ export function ExcalidrawWrapper({
   const retryQueueRef = useRef<RetryQueueItem[]>([])
   const RETRY_QUEUE_KEY = useMemo(() => `retry-queue-${boardSlug}`, [boardSlug])
   const lastSavedElementsRef = useRef<any[]>([])
+  
+  // Track initial data for Excalidraw (should only be set once on mount)
+  const initialDataRef = useRef<{ elements: any[]; appState: any } | null>(null)
+  
+  // Flag to prevent onChange loops when we're updating from our own state changes
+  const isUpdatingFromStateRef = useRef(false)
 
   // Sanitize appState to ensure Excalidraw compatibility
   const sanitizeAppState = useCallback((appState: any): any => {
@@ -140,6 +146,13 @@ export function ExcalidrawWrapper({
       setAppState(sanitizedAppState)
       // Initialize last saved elements reference
       lastSavedElementsRef.current = JSON.parse(JSON.stringify(initialElementsArray))
+      // Store initial data for Excalidraw (only set once)
+      if (!initialDataRef.current) {
+        initialDataRef.current = {
+          elements: initialElementsArray,
+          appState: sanitizedAppState,
+        }
+      }
       setHasError(false)
       setErrorMessage(null)
     } catch (error) {
@@ -369,15 +382,21 @@ export function ExcalidrawWrapper({
 
   const handleChange = useCallback(
     (elements: readonly any[], appState: any, files?: any) => {
+      // Prevent infinite loops - if we're updating from our own state change, ignore
+      if (isUpdatingFromStateRef.current) {
+        return
+      }
+
       // Convert readonly array to mutable for our state management
       const mutableElements = [...elements]
       
       // Check if elements actually changed (not just appState like focus/zoom/pan)
       const hasElementChanges = elementsChanged(mutableElements, lastSavedElementsRef.current)
 
-      // Update local state immediately for responsiveness (keep original appState for Excalidraw)
+      // Update local state for tracking (but don't pass back to Excalidraw via initialData)
+      // Excalidraw manages its own state, we just track it for saving
       setElements(mutableElements)
-      setAppState(appState) // Use original for Excalidraw rendering
+      setAppState(appState)
 
       // Only mark as dirty and save if elements actually changed
       // This prevents false "unsaved changes" from focus/blur events
@@ -476,10 +495,7 @@ export function ExcalidrawWrapper({
           excalidrawAPI={(api) => {
             excalidrawRef.current = api
           }}
-          initialData={{
-            elements: elements,
-            appState: appState,
-          }}
+          initialData={initialDataRef.current || { elements: [], appState: {} }}
           onChange={handleChange}
         />
       </div>
