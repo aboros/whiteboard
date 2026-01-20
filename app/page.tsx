@@ -1,11 +1,24 @@
-export default function Home() {
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm">
-        <h1 className="text-4xl font-bold text-center">
-          Welcome to Whiteboard
-        </h1>
-      </div>
-    </main>
-  );
+import { getBoards } from '@/lib/actions/boards'
+import { DashboardClient } from '@/components/boards/DashboardClient'
+
+export default async function DashboardPage() {
+  const result = await getBoards()
+
+  if (result.error) {
+    return (
+      <main className="min-h-screen p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+            <p className="text-red-800 dark:text-red-200">
+              {result.error}
+            </p>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
+  const boards = result.data || []
+
+  return <DashboardClient initialBoards={boards} />
 }
