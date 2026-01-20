@@ -375,7 +375,7 @@
           5,
           6
         ],
-        "status": "pending",
+        "status": "done",
         "subtasks": [
           {
             "id": 1,
@@ -383,7 +383,7 @@
             "description": "Create debounced save callback (5000ms) in ExcalidrawWrapper, integrate with Excalidraw onChange, add dirty state tracking with save indicator UI",
             "dependencies": [],
             "details": "Use useDebounceCallback or useMemo(debounce(saveToDb, 5000)); Track isDirty state on any change, clear on successful save; Add visual indicator (spinner/dot) in UI; Ensure immediate state updates for responsiveness while debouncing save[1][2][3]",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Draw element→verify dirty indicator shows→wait 5s→verify indicator clears; Rapid changes→single API call only"
           },
           {
@@ -394,7 +394,7 @@
               1
             ],
             "details": "Define async saveToDb(elements, appState) → await updateBoard(slug, {elements, app_state: appState}); Handle success by clearing dirty state; Add basic error logging; Ensure proper JSON serialization for Excalidraw data structures",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Mock updateBoard→verify correct payload structure sent; Test with real elements/appState→check database updates"
           },
           {
@@ -405,7 +405,7 @@
               2
             ],
             "details": "Create retry queue array; On save failure, push to queue with attempt count; Use setTimeout with backoff (1000 * 2^(attempt-1)); Max 3 retries then show permanent error; Process queue FIFO; Persist queue to localStorage for page refresh",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Mock network fail→verify 3 retries with increasing delays; Queue multiple fails→process in order; Refresh page→retry pending saves"
           },
           {
@@ -416,7 +416,7 @@
               3
             ],
             "details": "Use navigator.onLine and window 'online'/'offline' events; Process retry queue on reconnect; Add toast notifications for save success/failure/permanent error; Show 'Offline - will sync when back online' message; Clear queue after 3 failed retries",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Toggle network→verify offline message, queue pause/resume; Simulate disconnect during save→retry on reconnect; Test 4th retry failure→show error toast"
           }
         ]
@@ -586,7 +586,7 @@
     ],
     "metadata": {
       "created": "2026-01-20T15:29:39.230Z",
-      "updated": "2026-01-20T17:08:35.650Z",
+      "updated": "2026-01-20T17:15:37.831Z",
       "description": "Tasks for master context"
     }
   }

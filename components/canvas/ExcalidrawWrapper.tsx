@@ -1,9 +1,12 @@
 'use client'
 
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import dynamic from 'next/dynamic'
+import { useDebouncedCallback } from 'use-debounce'
 import '@excalidraw/excalidraw/index.css'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types/types'
+import { updateBoard } from '@/lib/actions/boards'
+import { ToastManager, type ToastType } from '@/components/ui/Toast'
 
 // Dynamic import to avoid SSR issues
 const Excalidraw = dynamic(
@@ -29,6 +32,8 @@ interface ExcalidrawWrapperProps {
 }
 
 const MAX_ELEMENTS = 5000
+const SAVE_DEBOUNCE_MS = 5000
+const MAX_RETRIES = 3
 
 /**
  * Validates Excalidraw data structure
@@ -55,6 +60,13 @@ function validateExcalidrawData(elements: any[], appState: any): {
   return { valid: true }
 }
 
+interface RetryQueueItem {
+  elements: any[]
+  appState: any
+  attempts: number
+  timestamp: number
+}
+
 export function ExcalidrawWrapper({
   initialElements,
   initialAppState,
@@ -66,6 +78,42 @@ export function ExcalidrawWrapper({
   const [appState, setAppState] = useState<any>({})
   const [hasError, setHasError] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  
+  // Auto-save state
+  const [isDirty, setIsDirty] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isOnline, setIsOnline] = useState(true)
+  const [toasts, setToasts] = useState<Array<{ id: string; message: string; type: ToastType }>>([])
+  const retryQueueRef = useRef<RetryQueueItem[]>([])
+  const RETRY_QUEUE_KEY = useMemo(() => `retry-queue-${boardSlug}`, [boardSlug])
+  const lastSavedElementsRef = useRef<any[]>([])
+
+  // Sanitize appState to ensure Excalidraw compatibility
+  const sanitizeAppState = useCallback((appState: any): any => {
+    if (!appState || typeof appState !== 'object') {
+      return {}
+    }
+
+    // Create a clean copy of appState
+    const sanitized = { ...appState }
+
+    // Excalidraw expects collaborators to be a Map, not a plain object
+    // Since we're not using real-time collaboration yet (Task 8), we can safely remove it
+    // or convert it to a Map if it exists
+    if (sanitized.collaborators) {
+      if (sanitized.collaborators instanceof Map) {
+        // Already a Map, keep it
+      } else if (typeof sanitized.collaborators.forEach === 'function') {
+        // Already has forEach (might be a Map-like object), keep it
+      } else {
+        // Convert object to Map or remove it
+        // For now, we'll remove it since we're not using collaboration yet
+        delete sanitized.collaborators
+      }
+    }
+
+    return sanitized
+  }, [])
 
   // Validate and initialize data
   const initializeData = useCallback(() => {
@@ -82,9 +130,13 @@ export function ExcalidrawWrapper({
         return
       }
 
-      // Data is valid, use it
-      setElements(initialElements || [])
-      setAppState(initialAppState || {})
+      // Data is valid, sanitize and use it
+      const sanitizedAppState = sanitizeAppState(initialAppState || {})
+      const initialElementsArray = initialElements || []
+      setElements(initialElementsArray)
+      setAppState(sanitizedAppState)
+      // Initialize last saved elements reference
+      lastSavedElementsRef.current = JSON.parse(JSON.stringify(initialElementsArray))
       setHasError(false)
       setErrorMessage(null)
     } catch (error) {
@@ -95,21 +147,253 @@ export function ExcalidrawWrapper({
       setElements([])
       setAppState({})
     }
-  }, [initialElements, initialAppState])
+  }, [initialElements, initialAppState, sanitizeAppState])
 
   // Initialize on mount
   useEffect(() => {
     initializeData()
-  }, [initializeData])
-
-  const handleChange = useCallback((elements: any[], appState: any) => {
-    // Update local state immediately for responsiveness
-    setElements(elements)
-    setAppState(appState)
     
-    // Note: Auto-save will be implemented in Task #7
-    // For now, we just update the local state
+    // Load retry queue from localStorage
+    try {
+      const savedQueue = localStorage.getItem(RETRY_QUEUE_KEY)
+      if (savedQueue) {
+        const queue = JSON.parse(savedQueue) as RetryQueueItem[]
+        retryQueueRef.current = queue
+      }
+    } catch (error) {
+      console.error('Failed to load retry queue:', error)
+    }
+    
+    // Set initial online status
+    setIsOnline(navigator.onLine)
+  }, [initializeData, RETRY_QUEUE_KEY])
+
+  // Save retry queue to localStorage
+  const saveRetryQueue = useCallback(() => {
+    try {
+      localStorage.setItem(RETRY_QUEUE_KEY, JSON.stringify(retryQueueRef.current))
+    } catch (error) {
+      console.error('Failed to save retry queue:', error)
+    }
+  }, [RETRY_QUEUE_KEY])
+
+  // Add toast notification
+  const addToast = useCallback((message: string, type: ToastType) => {
+    const id = `${Date.now()}-${Math.random()}`
+    setToasts((prev) => [...prev, { id, message, type }])
   }, [])
+
+  // Remove toast notification
+  const removeToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((toast) => toast.id !== id))
+  }, [])
+
+  // Deep compare elements to detect actual content changes
+  const elementsChanged = useCallback((newElements: any[], oldElements: any[]): boolean => {
+    // Quick length check
+    if (newElements.length !== oldElements.length) {
+      return true
+    }
+
+    // Deep comparison by serializing (for Excalidraw elements, this is reliable)
+    // We compare the essential properties that indicate content changes
+    try {
+      const newSerialized = JSON.stringify(
+        newElements.map((el) => ({
+          id: el.id,
+          type: el.type,
+          x: el.x,
+          y: el.y,
+          width: el.width,
+          height: el.height,
+          points: el.points,
+          text: el.text,
+          // Include other essential properties
+          strokeColor: el.strokeColor,
+          backgroundColor: el.backgroundColor,
+          fillStyle: el.fillStyle,
+          strokeWidth: el.strokeWidth,
+        }))
+      )
+      const oldSerialized = JSON.stringify(
+        oldElements.map((el) => ({
+          id: el.id,
+          type: el.type,
+          x: el.x,
+          y: el.y,
+          width: el.width,
+          height: el.height,
+          points: el.points,
+          text: el.text,
+          strokeColor: el.strokeColor,
+          backgroundColor: el.backgroundColor,
+          fillStyle: el.fillStyle,
+          strokeWidth: el.strokeWidth,
+        }))
+      )
+      return newSerialized !== oldSerialized
+    } catch (error) {
+      // If comparison fails, assume changed to be safe
+      console.warn('Elements comparison failed, assuming changed:', error)
+      return true
+    }
+  }, [])
+
+  // Save to database with retry logic
+  const saveToDb = useCallback(async (elements: any[], appState: any, attempt = 0): Promise<void> => {
+    // Don't save if offline (will queue for later)
+    if (!navigator.onLine) {
+      retryQueueRef.current.push({
+        elements,
+        appState,
+        attempts: 0,
+        timestamp: Date.now(),
+      })
+      saveRetryQueue()
+      setIsDirty(true)
+      addToast('Offline - changes will sync when back online', 'info')
+      return
+    }
+
+    setIsSaving(true)
+
+    try {
+      const result = await updateBoard(boardSlug, {
+        elements,
+        app_state: appState,
+      })
+
+      if (result.error) {
+        throw new Error(result.error)
+      }
+
+      // Success
+      setIsDirty(false)
+      setIsSaving(false)
+      
+      // Update last saved elements reference
+      lastSavedElementsRef.current = JSON.parse(JSON.stringify(elements))
+      
+      // Note: We don't filter the retry queue here because array/object comparison
+      // by reference won't work. The queue will be processed normally, and newer
+      // successful saves will naturally overwrite older data in the database.
+      saveRetryQueue()
+    } catch (error) {
+      setIsSaving(false)
+      console.error('Save failed:', error)
+
+      // Retry with exponential backoff
+      if (attempt < MAX_RETRIES) {
+        const backoffDelay = 1000 * Math.pow(2, attempt) // 1s, 2s, 4s
+        retryQueueRef.current.push({
+          elements,
+          appState,
+          attempts: attempt + 1,
+          timestamp: Date.now(),
+        })
+        saveRetryQueue()
+
+        setTimeout(() => {
+          saveToDb(elements, appState, attempt + 1)
+        }, backoffDelay)
+      } else {
+        // Max retries exceeded
+        retryQueueRef.current.push({
+          elements,
+          appState,
+          attempts: attempt,
+          timestamp: Date.now(),
+        })
+        saveRetryQueue()
+        setIsDirty(true)
+        addToast('Failed to save. Please try again later.', 'error')
+      }
+    }
+  }, [boardSlug, saveRetryQueue, addToast])
+
+  // Debounced save function
+  const debouncedSave = useDebouncedCallback(
+    (elements: any[], appState: any) => {
+      saveToDb(elements, appState, 0)
+    },
+    SAVE_DEBOUNCE_MS
+  )
+
+  // Process retry queue
+  const processRetryQueue = useCallback(async () => {
+    if (!navigator.onLine || retryQueueRef.current.length === 0) {
+      return
+    }
+
+    const queue = [...retryQueueRef.current]
+    retryQueueRef.current = []
+    saveRetryQueue()
+
+    for (const item of queue) {
+      await saveToDb(item.elements, item.appState, item.attempts)
+    }
+  }, [saveToDb, saveRetryQueue])
+
+  // Process retry queue on mount if there are pending items
+  useEffect(() => {
+    if (retryQueueRef.current.length > 0 && navigator.onLine) {
+      processRetryQueue()
+    }
+  }, [processRetryQueue])
+
+  // Network status monitoring
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true)
+      // Process queued saves when back online
+      if (retryQueueRef.current.length > 0) {
+        processRetryQueue()
+      }
+    }
+
+    const handleOffline = () => {
+      setIsOnline(false)
+    }
+
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [processRetryQueue])
+
+  const handleChange = useCallback(
+    (elements: any[], appState: any) => {
+      // Check if elements actually changed (not just appState like focus/zoom/pan)
+      const hasElementChanges = elementsChanged(elements, lastSavedElementsRef.current)
+
+      // Update local state immediately for responsiveness (keep original appState for Excalidraw)
+      setElements(elements)
+      setAppState(appState) // Use original for Excalidraw rendering
+
+      // Only mark as dirty and save if elements actually changed
+      // This prevents false "unsaved changes" from focus/blur events
+      if (hasElementChanges) {
+        // Sanitize appState before saving (remove collaborators Map which can't be serialized)
+        const sanitizedAppState = { ...appState }
+        // Remove collaborators from saved state (it's a Map and not serializable)
+        // We'll handle real-time collaboration separately in Task 8
+        if (sanitizedAppState.collaborators) {
+          delete sanitizedAppState.collaborators
+        }
+
+        // Mark as dirty
+        setIsDirty(true)
+
+        // Trigger debounced save with sanitized appState
+        debouncedSave(elements, sanitizedAppState)
+      }
+      // If only appState changed (focus, zoom, pan, etc.), don't mark dirty or save
+    },
+    [debouncedSave, elementsChanged]
+  )
 
   const handleErrorFallback = useCallback(() => {
     // Reset to empty canvas
@@ -155,15 +439,45 @@ export function ExcalidrawWrapper({
   }
 
   return (
-    <div className="w-screen h-screen fixed top-0 left-0 right-0 bottom-0">
-      <Excalidraw
-        ref={excalidrawRef}
-        initialData={{
-          elements: elements,
-          appState: appState,
-        }}
-        onChange={handleChange}
-      />
-    </div>
+    <>
+      <div className="w-screen h-screen fixed top-0 left-0 right-0 bottom-0">
+        {/* Save status indicator */}
+        <div className="fixed top-4 left-4 z-50 flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 shadow-lg">
+          {isSaving ? (
+            <>
+              <div className="inline-block animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+              <span className="text-sm text-gray-700 dark:text-gray-300">Saving...</span>
+            </>
+          ) : isDirty ? (
+            <>
+              <div className="h-3 w-3 rounded-full bg-yellow-500"></div>
+              <span className="text-sm text-gray-700 dark:text-gray-300">Unsaved changes</span>
+            </>
+          ) : (
+            <>
+              <div className="h-3 w-3 rounded-full bg-green-500"></div>
+              <span className="text-sm text-gray-700 dark:text-gray-300">Saved</span>
+            </>
+          )}
+          {!isOnline && (
+            <span className="text-xs text-orange-600 dark:text-orange-400 ml-2">
+              (Offline)
+            </span>
+          )}
+        </div>
+
+        <Excalidraw
+          ref={excalidrawRef}
+          initialData={{
+            elements: elements,
+            appState: appState,
+          }}
+          onChange={handleChange}
+        />
+      </div>
+
+      {/* Toast notifications */}
+      <ToastManager toasts={toasts} onRemove={removeToast} />
+    </>
   )
 }
