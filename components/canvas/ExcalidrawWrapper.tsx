@@ -96,6 +96,10 @@ export function ExcalidrawWrapper({
   
   // Flag to prevent onChange loops when we're updating from our own state changes
   const isUpdatingFromStateRef = useRef(false)
+  
+  // Use refs to track current values without causing re-renders
+  const currentElementsRef = useRef<any[]>([])
+  const currentAppStateRef = useRef<any>({})
 
   // Sanitize appState to ensure Excalidraw compatibility
   const sanitizeAppState = useCallback((appState: any): any => {
@@ -390,13 +394,16 @@ export function ExcalidrawWrapper({
       // Convert readonly array to mutable for our state management
       const mutableElements = [...elements]
       
+      // Update refs (no re-render) - track current values without causing updates
+      currentElementsRef.current = mutableElements
+      currentAppStateRef.current = appState
+      
       // Check if elements actually changed (not just appState like focus/zoom/pan)
       const hasElementChanges = elementsChanged(mutableElements, lastSavedElementsRef.current)
 
-      // Update local state for tracking (but don't pass back to Excalidraw via initialData)
-      // Excalidraw manages its own state, we just track it for saving
-      setElements(mutableElements)
-      setAppState(appState)
+      // DO NOT update state here - this causes re-renders that trigger onChange again
+      // We only need to track values in refs for saving purposes
+      // State (elements, appState) is only used for initialization, not for tracking changes
 
       // Only mark as dirty and save if elements actually changed
       // This prevents false "unsaved changes" from focus/blur events
@@ -409,7 +416,7 @@ export function ExcalidrawWrapper({
           delete sanitizedAppState.collaborators
         }
 
-        // Mark as dirty
+        // Mark as dirty (this is safe - it only updates save status UI)
         setIsDirty(true)
 
         // Trigger debounced save with sanitized appState
