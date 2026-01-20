@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { SupabaseProvider } from "@/components/providers/SupabaseProvider";
+import { Header } from "@/components/layout/Header";
 
 export const metadata: Metadata = {
   title: "Whiteboard",
@@ -15,7 +16,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <SupabaseProvider>{children}</SupabaseProvider>
+        <SupabaseProvider>
+          <Header />
+          {children}
+        </SupabaseProvider>
       </body>
     </html>
   );
