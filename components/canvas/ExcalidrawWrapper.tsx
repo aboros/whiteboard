@@ -4,9 +4,12 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import { useDebouncedCallback } from 'use-debounce'
 import '@excalidraw/excalidraw/index.css'
-import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types/types'
 import { updateBoard } from '@/lib/actions/boards'
 import { ToastManager, type ToastType } from '@/components/ui/Toast'
+
+// Type for Excalidraw API ref - using any since Excalidraw types aren't always exported correctly
+// The actual API uses readonly arrays, so we use any to avoid type conflicts
+type ExcalidrawAPI = any
 
 // Dynamic import to avoid SSR issues
 const Excalidraw = dynamic(
@@ -73,7 +76,7 @@ export function ExcalidrawWrapper({
   boardSlug,
   boardName,
 }: ExcalidrawWrapperProps) {
-  const excalidrawRef = useRef<ExcalidrawImperativeAPI>(null)
+  const excalidrawRef = useRef<ExcalidrawAPI | null>(null)
   const [elements, setElements] = useState<any[]>([])
   const [appState, setAppState] = useState<any>({})
   const [hasError, setHasError] = useState(false)
@@ -365,12 +368,15 @@ export function ExcalidrawWrapper({
   }, [processRetryQueue])
 
   const handleChange = useCallback(
-    (elements: any[], appState: any) => {
+    (elements: readonly any[], appState: any, files?: any) => {
+      // Convert readonly array to mutable for our state management
+      const mutableElements = [...elements]
+      
       // Check if elements actually changed (not just appState like focus/zoom/pan)
-      const hasElementChanges = elementsChanged(elements, lastSavedElementsRef.current)
+      const hasElementChanges = elementsChanged(mutableElements, lastSavedElementsRef.current)
 
       // Update local state immediately for responsiveness (keep original appState for Excalidraw)
-      setElements(elements)
+      setElements(mutableElements)
       setAppState(appState) // Use original for Excalidraw rendering
 
       // Only mark as dirty and save if elements actually changed
@@ -388,7 +394,7 @@ export function ExcalidrawWrapper({
         setIsDirty(true)
 
         // Trigger debounced save with sanitized appState
-        debouncedSave(elements, sanitizedAppState)
+        debouncedSave(mutableElements, sanitizedAppState)
       }
       // If only appState changed (focus, zoom, pan, etc.), don't mark dirty or save
     },
@@ -467,7 +473,9 @@ export function ExcalidrawWrapper({
         </div>
 
         <Excalidraw
-          ref={excalidrawRef}
+          excalidrawAPI={(api) => {
+            excalidrawRef.current = api
+          }}
           initialData={{
             elements: elements,
             appState: appState,
