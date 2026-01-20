@@ -53,7 +53,7 @@ A self-hostable collaborative whiteboard app that provides:
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
 │  │  Auth Pages │  │  Dashboard  │  │  Board View         │  │
 │  │  - Login    │  │  - List     │  │  - ExcalidrawWrapper│  │
-│  │  - Signup   │  │  - Create   │  │  - PresenceAvatars  │  │
+│  │  (Magic Link)│  │  - Create   │  │  - PresenceAvatars  │  │
 │  └─────────────┘  └─────────────┘  └─────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
                               │
@@ -62,8 +62,8 @@ A self-hostable collaborative whiteboard app that provides:
 │                         Supabase                             │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
 │  │    Auth     │  │  Postgres   │  │     Realtime        │  │
-│  │  - Email/PW │  │  - boards   │  │  - Broadcast        │  │
-│  │  - OAuth    │  │    table    │  │  - Presence         │  │
+│  │  - Magic Link│  │  - boards   │  │  - Broadcast        │  │
+│  │  (Email Only)│  │    table    │  │  - Presence         │  │
 │  └─────────────┘  └─────────────┘  └─────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -76,38 +76,44 @@ A self-hostable collaborative whiteboard app that provides:
 
 **Priority: P0 (Required)**
 
+**Note**: Users are added manually by administrators via Supabase UI. This is a small-team application where manual user management is acceptable.
+
 #### Requirements
 
-- F1.1: Users can sign up with email and password
-- F1.2: Users can log in with email and password
-- F1.3: Users can log out
-- F1.4: All routes except /login and /signup require authentication
-- F1.5: Unauthenticated users are redirected to /login
-- F1.6: Session persists across browser refreshes
+- F1.1: Users can log in with email via magic link (passwordless)
+- F1.2: Users receive magic link via email after submitting email address
+- F1.3: Clicking magic link authenticates user and establishes session
+- F1.4: Users can log out
+- F1.5: All routes except /login and /auth/callback require authentication
+- F1.6: Unauthenticated users are redirected to /login
+- F1.7: Session persists across browser refreshes
 
 #### Validation Requirements
 
-- F1.7: Email must be valid format (RFC 5322 compliant)
-- F1.8: Password must be at least 8 characters
-- F1.9: Email and password fields are required
+- F1.8: Email must be valid format (RFC 5322 compliant)
+- F1.9: Email field is required
 - F1.10: Display validation errors inline on form submission
+- F1.11: Show "Check your email" confirmation message after successful magic link request
 
 #### Error Handling Requirements
 
-- F1.11: Network errors show user-friendly message with retry option
-- F1.12: Invalid credentials show specific error (not generic "login failed")
-- F1.13: Session expiration redirects to login with message
-- F1.14: Server errors (500) show generic error message, log details server-side
+- F1.12: Network errors show user-friendly message with retry option
+- F1.13: Invalid email format shows validation error before submission
+- F1.14: Magic link sending failures show user-friendly error message
+- F1.15: Invalid or expired magic link tokens show appropriate error and redirect to login
+- F1.16: Session expiration redirects to login with message
+- F1.17: Server errors (500) show generic error message, log details server-side
 
 #### Acceptance Criteria
 
-- [ ] New user can create account and access dashboard
+- [ ] User can request magic link by entering email address
+- [ ] "Check your email" message appears after successful request
+- [ ] Clicking magic link in email authenticates user and redirects to dashboard
 - [ ] Existing user can log in and see their session persist
 - [ ] Logged out user cannot access /board/* routes
-- [ ] Invalid credentials show appropriate error message
 - [ ] Invalid email format shows validation error before submission
-- [ ] Password less than 8 characters shows validation error
-- [ ] Network failure during login shows error with retry option
+- [ ] Network failure during magic link request shows error with retry option
+- [ ] Invalid/expired magic link token shows error and redirects to login
 - [ ] Expired session redirects to login with informative message
 - [ ] Attempting to access protected route while logged out redirects to login
 
@@ -450,15 +456,16 @@ create trigger boards_updated_at
 │   ├── layout.tsx                 # Root layout with providers
 │   ├── page.tsx                   # Dashboard (board list)
 │   ├── login/
-│   │   └── page.tsx               # Login page
-│   ├── signup/
-│   │   └── page.tsx               # Signup page
+│   │   └── page.tsx               # Login page (magic link)
+│   ├── auth/
+│   │   └── callback/
+│   │       └── route.ts           # Magic link callback handler
 │   └── board/
 │       └── [slug]/
 │           └── page.tsx           # Board view
 ├── components/
 │   ├── auth/
-│   │   └── AuthForm.tsx           # Reusable login/signup form
+│   │   └── AuthForm.tsx           # Magic link login form (email only)
 │   ├── boards/
 │   │   ├── BoardCard.tsx          # Board preview card
 │   │   ├── BoardList.tsx          # Grid of board cards
@@ -505,7 +512,10 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 2. Navigate to SQL Editor
 3. Run the migration SQL from Database Schema section
 4. Copy project URL and anon key to .env.local
-5. Enable Realtime for the `boards` table (optional, for DB change subscriptions)
+5. Enable Magic Link authentication in Authentication → Providers → Email
+6. Configure redirect URL: `http://localhost:3000/auth/callback` (development)
+7. Add users manually via Authentication → Users → Add user (email only, no password required)
+8. Enable Realtime for the `boards` table (optional, for DB change subscriptions)
 
 ### Deployment Requirements
 
@@ -557,12 +567,12 @@ NODE_ENV=production
 
 ### Phase 2: Authentication
 
-- [ ] Create auth form component
-- [ ] Build login page
-- [ ] Build signup page
+- [ ] Create auth form component (email-only for magic link)
+- [ ] Build login page with magic link request
+- [ ] Implement magic link callback handler route
 - [ ] Implement Next.js middleware for route protection
 - [ ] Add logout functionality
-- [ ] Test auth flow end-to-end
+- [ ] Test auth flow end-to-end (email → magic link → login)
 
 ### Phase 3: Board Management
 
@@ -702,14 +712,14 @@ The following features are explicitly not included in this version:
 
 ### Integration Tests
 
-- **Authentication flow**: Sign up → Login → Access protected route → Logout
+- **Authentication flow**: Request magic link → Click link → Access protected route → Logout
 - **Board CRUD**: Create → Read → Update → Delete board
 - **Save/Load cycle**: Draw → Auto-save → Refresh → Verify persistence
 
 ### End-to-End Tests
 
 - **Critical user flows**:
-  - New user registration and first board creation
+  - Magic link login flow (email submission → click link → authenticated)
   - Two users collaborating on same board simultaneously
   - Network disconnection and reconnection during collaboration
   - Board deletion while another user is viewing it
@@ -777,8 +787,7 @@ The following features are explicitly not included in this version:
 
 The following features are planned for future releases but not included in v1:
 
-- **F1.7**: OAuth login with Google
-- **F1.8**: Magic link (passwordless) login
+- **F1.7**: OAuth login with Google (magic link is now the primary auth method)
 - **F2.7**: Board templates and duplication
 - **F2.8**: Board folders and organization
 - **F5.7**: Advanced conflict resolution (operational transformation)

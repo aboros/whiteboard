@@ -38,7 +38,7 @@
             "dependencies": [
               1
             ],
-            "details": "Update tailwind.config.js: module.exports = {darkMode: 'class', ...}; mkdir components lib app/board app/login app/signup; touch .env.local with NEXT_PUBLIC_SUPABASE_URL= and NEXT_PUBLIC_SUPABASE_ANON_KEY= placeholders.",
+            "details": "Update tailwind.config.js: module.exports = {darkMode: 'class', ...}; mkdir components lib app/board app/login app/signup; touch .env.local with NEXT_PUBLIC_SUPABASE_URL= and NEXT_PUBLIC_SUPABASE_ANON_KEY= placeholders.\n<info added on 2026-01-20T16:33:47.774Z>\nUpdate tailwind.config.js: module.exports = {darkMode: 'class', ...}; mkdir components lib app/board app/login app/auth/callback; touch .env.local with NEXT_PUBLIC_SUPABASE_URL= and NEXT_PUBLIC_SUPABASE_ANON_KEY= placeholders.\n</info added on 2026-01-20T16:33:47.774Z>",
             "status": "done",
             "testStrategy": "Verify Tailwind dark mode toggles via class; npm run dev shows no config errors; structure matches PRD spec."
           }
@@ -125,86 +125,100 @@
       {
         "id": 4,
         "title": "Authentication System",
-        "description": "Implement complete auth flow with login/signup/logout and middleware protection",
-        "details": "Create components/auth/AuthForm.tsx with email/password validation (8+ chars, RFC5322 email); app/login/page.tsx and app/signup/page.tsx using server actions; Implement middleware.ts protecting all routes except /login /signup; Add logout button to layout; Use supabase.auth.signUp/signInWithPassword/getSession; Persist session with cookies via @supabase/ssr",
-        "testStrategy": "E2E: signup→login→access dashboard→logout→blocked from protected routes; Test validation errors inline; Verify session persists on refresh; Test invalid credentials show specific errors",
-        "priority": "high",
+        "description": "Implement magic link login/logout flow and middleware protection for routes",
+        "status": "pending",
         "dependencies": [
           1,
           2,
           3
         ],
-        "status": "pending",
+        "priority": "high",
+        "details": "Create components/auth/AuthForm.tsx with email validation (RFC5322); app/login/page.tsx using server actions for magic link auth; Implement middleware.ts protecting all routes except /login and magic link callback; Add logout button to layout; Use supabase.auth.signInWithOtp/getSession; Persist session with cookies via @supabase/ssr; Show 'Check your email' message after submission",
+        "testStrategy": "E2E: email submission→check email message→click magic link→login→access protected routes→logout→blocked from protected routes; Test validation errors inline; Verify session persists on refresh; Test invalid/expired token errors",
         "subtasks": [
           {
             "id": 1,
-            "title": "Create AuthForm Component with Validation",
-            "description": "Develop reusable AuthForm.tsx component with email (RFC5322) and password (8+ chars) validation for login/signup forms.",
+            "title": "Create AuthForm Component with Email Validation",
+            "description": "Develop reusable AuthForm.tsx component with email (RFC5322) validation for magic link login form.",
             "dependencies": [],
-            "details": "Implement form with react-hook-form or similar; email regex per RFC5322; password minLength 8; display inline validation errors; support both login/signup modes via prop; Tailwind styled.",
+            "details": "Implement form with react-hook-form or similar; email regex per RFC5322; display inline validation errors; email-only input field; Tailwind styled; include submit button for requesting magic link.",
             "status": "pending",
-            "testStrategy": "Test valid/invalid email formats; test password length validation; verify form submission only on valid input; snapshot component render"
+            "testStrategy": "Test valid/invalid email formats; verify form submission only on valid input; snapshot component render; test loading state during submission"
           },
           {
             "id": 2,
-            "title": "Implement Login and Signup Pages with Server Actions",
-            "description": "Create app/login/page.tsx and app/signup/page.tsx using AuthForm and Supabase server actions for signInWithPassword/signUp.",
+            "title": "Implement Login Page with Magic Link Server Actions",
+            "description": "Create app/login/page.tsx using AuthForm and Supabase server actions for signInWithOtp.",
             "dependencies": [
               1
             ],
-            "details": "Use @supabase/ssr createServerClient in server actions; handle errors (invalid credentials, weak password); redirect to dashboard on success; share AuthForm with mode prop; add loading states.",
+            "details": "Use @supabase/ssr createServerClient in server actions; handle errors (invalid email format); show 'Check your email' message after successful submission; add loading states during submission.",
             "status": "pending",
-            "testStrategy": "Test successful login/signup redirects; test error messages for invalid email/password; verify session cookie set; test duplicate signup error handling"
+            "testStrategy": "Test successful magic link request shows confirmation message; test error messages for invalid email; verify email sending process works"
           },
           {
             "id": 3,
-            "title": "Implement Middleware for Route Protection",
-            "description": "Create middleware.ts to protect all routes except /login and /signup using Supabase middleware client.",
+            "title": "Implement Magic Link Callback Handler",
+            "description": "Create route handler for magic link callback URL that Supabase redirects to with token.",
             "dependencies": [
               2
             ],
-            "details": "Use lib/supabase/middleware.ts createMiddlewareClient; check session; redirect unauthenticated to /login; allow public routes: /login, /signup, /; protect /dashboard and /board/*.",
+            "details": "Implement app/auth/callback/route.ts to handle the OTP token from URL; verify token validity; establish session; redirect to dashboard on success; handle invalid/expired token errors.",
+            "status": "pending",
+            "testStrategy": "Test successful token verification establishes session; test invalid/expired token shows appropriate error; verify redirect to dashboard works"
+          },
+          {
+            "id": 4,
+            "title": "Implement Middleware for Route Protection",
+            "description": "Create middleware.ts to protect all routes except /login and magic link callback route using Supabase middleware client.",
+            "dependencies": [
+              2,
+              3
+            ],
+            "details": "Use lib/supabase/middleware.ts createMiddlewareClient; check session; redirect unauthenticated to /login; allow public routes: /login, /, /auth/callback; protect /dashboard and /board/*.",
             "status": "pending",
             "testStrategy": "Test protected route access requires login; verify public routes accessible; test middleware redirect to /login; confirm session cookie handling in middleware"
           },
           {
-            "id": 4,
+            "id": 5,
             "title": "Add Session Management and Logout Functionality",
             "description": "Integrate session persistence with cookies and add logout button to root layout with supabase.auth.signOut.",
             "dependencies": [
-              2,
-              3
+              3,
+              4
             ],
             "details": "Use @supabase/ssr for cookie-based session persistence; getSession in layout/server components; conditional render logout button when session exists; handle signOut with redirect to /login.",
             "status": "pending",
             "testStrategy": "Test session persists on page refresh; verify logout clears session/cookies; test conditional logout button visibility; confirm redirect after logout"
           },
           {
-            "id": 5,
-            "title": "Implement E2E Testing for Auth Flows",
-            "description": "Create comprehensive E2E tests covering signup→login→protected access→logout→blocked access flows with validation.",
+            "id": 6,
+            "title": "Implement E2E Testing for Magic Link Auth Flows",
+            "description": "Create comprehensive E2E tests covering email submission→check email message→magic link→login→protected access→logout→blocked access flows.",
             "dependencies": [
               1,
               2,
               3,
-              4
+              4,
+              5
             ],
-            "details": "Use Playwright/Cypress; test full user journey per test strategy; validate inline errors; test session persistence; cover edge cases like invalid credentials and protected route blocks.",
+            "details": "Use Playwright/Cypress; test full user journey per test strategy; validate inline errors for email; test session persistence; cover edge cases like invalid/expired tokens and protected route blocks.",
             "status": "pending",
-            "testStrategy": "E2E: signup→login→dashboard access→logout→blocked from protected; validation errors inline; session refresh persistence; specific error messages for failures"
+            "testStrategy": "E2E: email submission→check email message→click magic link→login→access protected routes→logout→blocked from protected; validation errors inline; session refresh persistence; specific error messages for failures"
           },
           {
-            "id": 6,
+            "id": 7,
             "title": "Implement Comprehensive Error Handling",
-            "description": "Add error handling for network errors (F1.11), invalid credentials (F1.12), session expiration (F1.13), and server errors (F1.14) with user-friendly messages and retry options",
-            "details": "Implement error handling in AuthForm and server actions: network errors show retry option, invalid credentials show specific error messages, session expiration redirects to login with message, server errors (500) show generic message with server-side logging",
-            "status": "pending",
+            "description": "Add error handling for network errors, email validation errors, magic link sending errors, and invalid/expired token errors with user-friendly messages and retry options",
             "dependencies": [
               2,
               3,
-              4
+              4,
+              5
             ],
-            "parentTaskId": 4
+            "details": "Implement error handling in AuthForm and server actions: network errors show retry option, email validation errors show inline, magic link sending errors display user-friendly message, invalid/expired tokens redirect to login with appropriate message, server errors (500) show generic message with server-side logging",
+            "status": "pending",
+            "testStrategy": "Test all error scenarios: network failures, invalid email formats, magic link sending failures, expired/invalid tokens; verify appropriate user feedback for each case"
           }
         ]
       },
@@ -563,7 +577,7 @@
               1,
               2
             ],
-            "details": "Add sections: Prerequisites (Docker, Supabase CLI), Environment Variables (NEXT_PUBLIC_SUPABASE_URL, ANON_KEY), Local Development (docker-compose up), Production Deployment (docker build/push), Supabase Setup (supabase migration up, enable realtime); Include health check verification and common issues",
+            "details": "Add sections: Prerequisites (Docker, Supabase CLI), Environment Variables (NEXT_PUBLIC_SUPABASE_URL, ANON_KEY), Local Development (docker-compose up), Production Deployment (docker build/push), Supabase Setup (supabase migration up, enable realtime); Include health check verification and common issues\n<info added on 2026-01-20T16:34:09.714Z>\n## Authentication Setup\n\n### Magic Link Authentication\n1. Enable Magic Link authentication in Supabase Dashboard (Authentication → Providers → Email → Enable Magic Link)\n2. Configure redirect URL for magic links: \n   - Development: http://localhost:3000/auth/callback\n   - Production: https://your-domain.com/auth/callback\n3. Add users manually via Supabase UI (Authentication → Users → Add user) - email only, no password required\n\n### Important Notes\n- Authentication is passwordless (magic link only)\n- Users are managed manually via Supabase UI\n- No password authentication or signup functionality is implemented\n</info added on 2026-01-20T16:34:09.714Z>",
             "status": "pending",
             "testStrategy": "Validate README instructions by following them end-to-end; confirm docker-compose up succeeds, health endpoint responds, Supabase migration applies without errors"
           }

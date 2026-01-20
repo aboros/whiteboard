@@ -36,12 +36,14 @@ Follow the PRD-defined structure strictly:
 app/
 ├── layout.tsx                 # Root layout with SupabaseProvider
 ├── page.tsx                   # Dashboard (board list)
-├── login/page.tsx             # Login page
-├── signup/page.tsx            # Signup page
+├── login/page.tsx             # Login page (magic link)
+├── auth/
+│   └── callback/
+│       └── route.ts           # Magic link callback handler
 └── board/[slug]/page.tsx      # Dynamic board route
 
 components/
-├── auth/AuthForm.tsx          # Reusable login/signup form
+├── auth/AuthForm.tsx          # Magic link login form (email only)
 ├── boards/                    # Board management components
 ├── canvas/                    # Excalidraw wrapper and presence
 └── ui/                        # Shared UI components
@@ -117,7 +119,7 @@ import { Excalidraw } from '@excalidraw/excalidraw'
 
 - Use Next.js middleware.ts to protect routes
 - Redirect unauthenticated users to /login
-- Allow /login and /signup without auth
+- Allow /login and /auth/callback without auth (magic link callback)
 
 ```typescript
 // ✅ DO: Protected routes via middleware
@@ -130,7 +132,10 @@ export async function middleware(req) {
   
   const { data: { session } } = await supabase.auth.getSession()
   
-  if (!session && !req.nextUrl.pathname.startsWith('/login') && !req.nextUrl.pathname.startsWith('/signup')) {
+  const publicPaths = ['/login', '/auth/callback']
+  const isPublicPath = publicPaths.some(path => req.nextUrl.pathname.startsWith(path))
+  
+  if (!session && !isPublicPath) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
   
@@ -244,6 +249,70 @@ export async function createBoard(name: string) {
     console.error('Create board error:', err)
     return { error: 'An unexpected error occurred' }
   }
+}
+```
+
+### Magic Link Authentication Pattern
+
+- **Passwordless authentication** - Users added manually via Supabase UI
+- Use `signInWithOtp` to send magic link via email
+- Handle callback route to verify token and establish session
+- Show "Check your email" message after successful request
+
+```typescript
+// ✅ DO: Magic link login server action
+'use server'
+
+import { createClient } from '@/lib/supabase/server'
+
+export async function requestMagicLink(email: string) {
+  const supabase = await createClient()
+  
+  // Email validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailRegex.test(email)) {
+    return { error: 'Invalid email format' }
+  }
+  
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: {
+      emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/auth/callback`
+    }
+  })
+  
+  if (error) {
+    return { error: 'Failed to send magic link. Please try again.' }
+  }
+  
+  return { success: true }
+}
+
+// ✅ DO: Magic link callback handler (app/auth/callback/route.ts)
+import { createClient } from '@/lib/supabase/server'
+import { NextResponse } from 'next/server'
+
+export async function GET(request: Request) {
+  const requestUrl = new URL(request.url)
+  const token_hash = requestUrl.searchParams.get('token_hash')
+  const type = requestUrl.searchParams.get('type')
+  const next = requestUrl.searchParams.get('next') ?? '/'
+  
+  if (token_hash && type) {
+    const supabase = await createClient()
+    
+    const { error } = await supabase.auth.verifyOtp({
+      type,
+      token_hash,
+    })
+    
+    if (!error) {
+      return NextResponse.redirect(new URL(next, request.url))
+    }
+  }
+  
+  // Invalid or expired token
+  return NextResponse.redirect(new URL('/login?error=invalid_token', request.url))
 }
 ```
 
@@ -554,17 +623,8 @@ export function validateEmail(email: string): { valid: boolean; error?: string }
   return { valid: true }
 }
 
-export function validatePassword(password: string): { valid: boolean; error?: string } {
-  if (!password) {
-    return { valid: false, error: 'Password is required' }
-  }
-  
-  if (password.length < 8) {
-    return { valid: false, error: 'Password must be at least 8 characters' }
-  }
-  
-  return { valid: true }
-}
+// Note: Password validation not needed - using magic link authentication only
+// Users are added manually via Supabase UI
 
 export function validateBoardName(name: string): { valid: boolean; error?: string } {
   if (!name || name.trim().length === 0) {

@@ -38,7 +38,7 @@
 			"taskTitle": "Authentication System",
 			"complexityScore": 7,
 			"recommendedSubtasks": 5,
-			"expansionPrompt": "Break into: 1) AuthForm component with validation, 2) Login/signup pages with server actions, 3) Middleware for route protection, 4) Session management and logout, 5) E2E testing flows.",
+			"expansionPrompt": "Break into: 1) AuthForm component with email validation (magic link only), 2) Login page with magic link server actions, 3) Magic link callback handler route, 4) Middleware for route protection, 5) Session management and logout, 6) E2E testing flows.",
 			"reasoning": "Full auth flow with validation, middleware, SSR session cookies; high complexity due to security considerations, multiple components, and integration with Supabase auth best practices."
 		},
 		{
