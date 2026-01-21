@@ -23,45 +23,94 @@ A collaborative whiteboard application built with Next.js, Excalidraw, and Supab
 ### Prerequisites
 
 - Node.js 18+ and npm
-- A Supabase account and project
-- (For deployment) GitHub and Vercel accounts
+- A Supabase account (free tier works)
+- Git
 
-### Local Development
+### Step 1: Clone and Install
 
-1. **Clone the repository**
-   ```bash
-   git clone <your-repo-url>
-   cd whiteboard
-   ```
+```bash
+# Clone the repository
+git clone https://github.com/your-username/whiteboard.git
+cd whiteboard
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+# Install dependencies
+npm install
+```
 
-3. **Set up environment variables**
-   
-   Create a `.env.local` file in the root directory:
-   ```bash
-   NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-   NEXT_PUBLIC_SITE_URL=http://localhost:3000
-   ```
+### Step 2: Set Up Supabase Project
 
-4. **Set up Supabase**
-   - Create a new project at [supabase.com](https://supabase.com)
-   - Run the database migration (see Database Schema section)
-   - Enable Magic Link authentication in Authentication → Providers → Email
-   - Configure redirect URL: `http://localhost:3000/auth/callback`
-   - Add users manually via Authentication → Users
+1. **Create a Supabase account and project**
+   - Go to [supabase.com](https://supabase.com) and sign up (or sign in)
+   - Click **New Project**
+   - Choose an organization (or create one)
+   - Fill in project details:
+     - **Name**: `whiteboard` (or your preferred name)
+     - **Database Password**: Create a strong password (save it securely)
+     - **Region**: Choose the closest region to you
+   - Click **Create new project**
+   - Wait 2-3 minutes for the project to be provisioned
 
-5. **Run the development server**
-   ```bash
-   npm run dev
-   ```
+2. **Get your Supabase credentials**
+   - Once your project is ready, go to **Settings** → **API**
+   - Copy the **Project URL** (e.g., `https://xxxxx.supabase.co`)
+   - Copy the **anon public** key (starts with `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`)
 
-6. **Open your browser**
-   Navigate to [http://localhost:3000](http://localhost:3000)
+3. **Set up the database schema**
+   - In your Supabase dashboard, go to **SQL Editor**
+   - Click **New query**
+   - Copy and paste the SQL from the [Database Schema](#database-schema) section below
+   - Click **Run** (or press `Cmd/Ctrl + Enter`)
+   - You should see "Success. No rows returned"
+
+4. **Enable Magic Link authentication**
+   - Go to **Authentication** → **Providers**
+   - Find **Email** in the list and click it
+   - Enable **Email** provider
+   - Under **Email Auth**, enable **Enable email confirmations** (optional, but recommended)
+   - Scroll down and click **Save**
+
+5. **Configure redirect URLs**
+   - Go to **Authentication** → **URL Configuration**
+   - Under **Redirect URLs**, add:
+     - `http://localhost:3000/auth/callback`
+   - Click **Save**
+
+6. **Add a test user** (optional, for testing)
+   - Go to **Authentication** → **Users**
+   - Click **Add user** → **Create new user**
+   - Enter an email address (use your own for testing)
+   - Leave password empty (we're using magic links)
+   - Click **Create user**
+
+### Step 3: Configure Environment Variables
+
+Create a `.env.local` file in the project root:
+
+```bash
+# Copy your values from Supabase Settings → API
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+```
+
+Replace the placeholder values with your actual Supabase credentials from Step 2.
+
+### Step 4: Run the Development Server
+
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### Step 5: Test the Application
+
+1. **Login**: Enter the email address you added in Supabase (Step 2.6)
+2. **Check your email**: You should receive a magic link
+3. **Click the magic link**: You'll be redirected back to the app and logged in
+4. **Create a board**: Click "New Board" and give it a name
+5. **Draw something**: Use the Excalidraw tools to draw on the canvas
+6. **Verify auto-save**: Wait 5 seconds and check the save indicator (top-left)
 
 ## Database Schema
 
@@ -132,7 +181,7 @@ CREATE TRIGGER update_boards_updated_at
 
 ## Deployment
 
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment instructions.
+For deploying to Vercel, see [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed instructions.
 
 ## Project Structure
 
