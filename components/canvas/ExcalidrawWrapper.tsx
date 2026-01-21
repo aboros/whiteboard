@@ -211,6 +211,14 @@ export function ExcalidrawWrapper({
   const broadcastTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const BROADCAST_DEBOUNCE_MS = 50 // Debounce broadcasts by 50ms during drawing
 
+  // Cursor tracking refs
+  const collaboratorsMapRef = useRef<Map<string, any>>(new Map())
+  const currentUserIdRef = useRef<string | null>(null)
+  const currentUserEmailRef = useRef<string | null>(null)
+  const lastCursorBroadcastRef = useRef<number>(0)
+  const cursorBroadcastTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const CURSOR_BROADCAST_THROTTLE_MS = 40 // Throttle cursor updates to ~25fps (40ms)
+
   // Sanitize appState to ensure Excalidraw compatibility
   const sanitizeAppState = useCallback((appState: any): any => {
     if (!appState || typeof appState !== 'object') {
@@ -597,7 +605,116 @@ export function ExcalidrawWrapper({
         return acc
       }, [] as Array<{ user_id: string; email: string; online_at: string }>)
       setOnlineUsers(uniqueUsers)
+
+      // Clean up cursors for users who are no longer present
+      if (excalidrawRef.current) {
+        const presentUserIds = new Set(uniqueUsers.map(u => u.user_id))
+        const collaborators = new Map(collaboratorsMapRef.current)
+        let hasChanges = false
+
+        // Remove collaborators who are no longer present (but keep current user)
+        collaborators.forEach((_, userId) => {
+          if (userId !== currentUserIdRef.current && !presentUserIds.has(userId)) {
+            collaborators.delete(userId)
+            hasChanges = true
+          }
+        })
+
+        if (hasChanges) {
+          collaboratorsMapRef.current = collaborators
+          excalidrawRef.current.updateScene({
+            collaborators: collaborators,
+          })
+        }
+      }
     })
+
+    // Listen for presence leave events to immediately remove cursors
+    channel.on('presence', { event: 'leave' }, ({ key, currentPresences }) => {
+      // key is the user_id that left
+      if (excalidrawRef.current && key && key !== currentUserIdRef.current) {
+        const collaborators = new Map(collaboratorsMapRef.current)
+        if (collaborators.has(key)) {
+          collaborators.delete(key)
+          collaboratorsMapRef.current = collaborators
+          excalidrawRef.current.updateScene({
+            collaborators: collaborators,
+          })
+        }
+      }
+    })
+
+    // Listen for cursor update events from other users
+    channel.on(
+      'broadcast',
+      { event: 'cursor-update' },
+      ({ payload }: { payload: { userId: string; email: string; pointer: { x: number; y: number }; button: 'up' | 'down'; selectedElementIds: string[] } }) => {
+        if (!excalidrawRef.current || !payload || !payload.userId) {
+          return
+        }
+
+        // Don't process our own cursor updates (we handle our own cursor locally)
+        if (payload.userId === currentUserIdRef.current) {
+          return
+        }
+
+        try {
+          // Update collaborators Map with remote cursor position
+          const collaborators = new Map(collaboratorsMapRef.current)
+          
+          // Generate a consistent color for this user based on their ID
+          const getUserColor = (userId: string): string => {
+            const colors = [
+              '#3b82f6', // blue
+              '#10b981', // green
+              '#8b5cf6', // purple
+              '#ec4899', // pink
+              '#eab308', // yellow
+              '#6366f1', // indigo
+              '#ef4444', // red
+              '#14b8a6', // teal
+            ]
+            let hash = 0
+            for (let i = 0; i < userId.length; i++) {
+              hash = userId.charCodeAt(i) + ((hash << 5) - hash)
+            }
+            return colors[Math.abs(hash) % colors.length]
+          }
+
+          // Get or create collaborator entry
+          let collaborator = collaborators.get(payload.userId)
+          if (!collaborator) {
+            // New collaborator - create entry
+            collaborator = {
+              username: payload.email || 'Unknown',
+              pointer: payload.pointer,
+              button: payload.button || 'up',
+              selectedElementIds: payload.selectedElementIds || [],
+              userState: 'ACTIVE',
+              isCurrentUser: false,
+              // Generate avatar color based on user ID
+              avatarUrl: undefined,
+            }
+          } else {
+            // Update existing collaborator
+            collaborator.pointer = payload.pointer
+            collaborator.button = payload.button || 'up'
+            collaborator.selectedElementIds = payload.selectedElementIds || []
+            collaborator.userState = 'ACTIVE'
+          }
+
+          collaborators.set(payload.userId, collaborator)
+          collaboratorsMapRef.current = collaborators
+
+          // Update Excalidraw with new collaborators Map
+          excalidrawRef.current.updateScene({
+            collaborators: collaborators,
+          })
+        } catch (error) {
+          console.error('Failed to update remote cursor:', error)
+        }
+      }
+    )
 
     // Listen for broadcast events (scene updates from other users)
     channel.on(
@@ -700,6 +817,10 @@ export function ExcalidrawWrapper({
         // Track user presence on subscribe (Task 9.1)
         supabase.auth.getUser().then(({ data: { user } }) => {
           if (user && channel) {
+            // Store current user info for cursor tracking
+            currentUserIdRef.current = user.id
+            currentUserEmailRef.current = user.email || 'Unknown'
+
             channel.track({
               user_id: user.id,
               email: user.email || 'Unknown',
@@ -731,11 +852,18 @@ export function ExcalidrawWrapper({
 
     // Cleanup on unmount
     return () => {
-      // Clear any pending broadcast
+      // Clear any pending broadcasts
       if (broadcastTimeoutRef.current) {
         clearTimeout(broadcastTimeoutRef.current)
         broadcastTimeoutRef.current = null
       }
+      if (cursorBroadcastTimeoutRef.current) {
+        clearTimeout(cursorBroadcastTimeoutRef.current)
+        cursorBroadcastTimeoutRef.current = null
+      }
+      
+      // Clear collaborators Map
+      collaboratorsMapRef.current.clear()
       
       if (channelRef.current) {
         channelRef.current.unsubscribe()
@@ -851,6 +979,88 @@ export function ExcalidrawWrapper({
     [debouncedSave, elementsChanged]
   )
 
+  // Handle pointer/cursor updates for collaboration
+  const handlePointerUpdate = useCallback(
+    (payload: {
+      pointer: { x: number; y: number; tool?: 'pointer' | 'laser' }
+      button: 'up' | 'down'
+      pointersMap: Map<number, Readonly<{ x: number; y: number }>>
+    }) => {
+      // Only broadcast if we have a user ID and channel
+      if (!currentUserIdRef.current || !channelRef.current || !payload.pointer) {
+        return
+      }
+
+      // Get selected elements from Excalidraw
+      const selectedElementIds: string[] = []
+      if (excalidrawRef.current) {
+        try {
+          const appState = excalidrawRef.current.getAppState()
+          if (appState?.selectedElementIds) {
+            selectedElementIds.push(...appState.selectedElementIds)
+          }
+        } catch (error) {
+          // Ignore errors getting selected elements
+        }
+      }
+
+      // Throttle cursor broadcasts to avoid flooding the network
+      const now = Date.now()
+      const timeSinceLastCursorBroadcast = now - lastCursorBroadcastRef.current
+
+      // Clear any pending cursor broadcast
+      if (cursorBroadcastTimeoutRef.current) {
+        clearTimeout(cursorBroadcastTimeoutRef.current)
+        cursorBroadcastTimeoutRef.current = null
+      }
+
+      // If we've broadcast recently, throttle it
+      if (timeSinceLastCursorBroadcast < CURSOR_BROADCAST_THROTTLE_MS) {
+        // Schedule a throttled broadcast
+        cursorBroadcastTimeoutRef.current = setTimeout(() => {
+          if (channelRef.current && currentUserIdRef.current) {
+            try {
+              channelRef.current.send({
+                type: 'broadcast',
+                event: 'cursor-update',
+                payload: {
+                  userId: currentUserIdRef.current,
+                  email: currentUserEmailRef.current || 'Unknown',
+                  pointer: payload.pointer,
+                  button: payload.button || 'up',
+                  selectedElementIds,
+                },
+              })
+              lastCursorBroadcastRef.current = Date.now()
+            } catch (error) {
+              console.error('Failed to broadcast cursor update:', error)
+            }
+          }
+          cursorBroadcastTimeoutRef.current = null
+        }, CURSOR_BROADCAST_THROTTLE_MS - timeSinceLastCursorBroadcast)
+      } else {
+        // Broadcast immediately
+        try {
+          channelRef.current.send({
+            type: 'broadcast',
+            event: 'cursor-update',
+            payload: {
+              userId: currentUserIdRef.current,
+              email: currentUserEmailRef.current || 'Unknown',
+              pointer: payload.pointer,
+              button: payload.button || 'up',
+              selectedElementIds,
+            },
+          })
+          lastCursorBroadcastRef.current = now
+        } catch (error) {
+          console.error('Failed to broadcast cursor update:', error)
+        }
+      }
+    },
+    []
+  )
+
   const handleErrorFallback = useCallback(() => {
     // Reset to empty canvas
     setHasError(false)
@@ -904,6 +1114,7 @@ export function ExcalidrawWrapper({
             }}
             initialData={initialDataRef.current || { elements: [], appState: {} }}
             onChange={handleChange}
+            onPointerUpdate={handlePointerUpdate}
           />
         </div>
       </div>
