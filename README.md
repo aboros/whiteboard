@@ -1,6 +1,10 @@
 # Whiteboard App
 
-A collaborative whiteboard application built with Next.js, Excalidraw, and Supabase.
+A collaborative whiteboard application built with Next.js, Excalidraw, and Supabase. 
+
+To keep things very tidy:  
+- Users can only be added via the Supabase UI.  
+- All users can see and edit all boards  
 
 ## Features
 
