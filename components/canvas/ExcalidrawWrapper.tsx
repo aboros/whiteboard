@@ -213,6 +213,8 @@ export function ExcalidrawWrapper({
 
   // Cursor tracking refs
   const collaboratorsMapRef = useRef<Map<string, any>>(new Map())
+  // Cache user profiles for collaborators
+  const collaboratorProfilesRef = useRef<Map<string, { screen_name: string | null; default_color: string }>>(new Map())
   const currentUserIdRef = useRef<string | null>(null)
   const currentUserEmailRef = useRef<string | null>(null)
   const lastCursorBroadcastRef = useRef<number>(0)
@@ -591,6 +593,65 @@ export function ExcalidrawWrapper({
       },
     })
 
+    // Fetch profiles for online users
+    const fetchCollaboratorProfiles = async (userIds: string[]) => {
+      if (userIds.length === 0) return
+
+      try {
+        const { data, error } = await supabase
+          .from('user_profiles')
+          .select('user_id, screen_name, default_color')
+          .in('user_id', userIds)
+
+        if (error) {
+          console.error('Error fetching collaborator profiles:', error)
+          return
+        }
+
+        if (data) {
+          const profileMap = new Map<string, { screen_name: string | null; default_color: string }>()
+          data.forEach((profile) => {
+            profileMap.set(profile.user_id, {
+              screen_name: profile.screen_name,
+              default_color: profile.default_color || '#3b82f6',
+            })
+          })
+          collaboratorProfilesRef.current = profileMap
+
+          // Update existing collaborators with profile data
+          if (excalidrawRef.current) {
+            const collaborators = new Map(collaboratorsMapRef.current)
+            let hasChanges = false
+
+            collaborators.forEach((collaborator, userId) => {
+              const profile = profileMap.get(userId)
+              if (profile) {
+                const updatedCollaborator = {
+                  ...collaborator,
+                  username: profile.screen_name || collaborator.username,
+                  // Note: Excalidraw doesn't support custom collaborator colors via API
+                  // Colors are auto-generated internally by Excalidraw
+                  // Don't set avatarUrl - we want to use color as background
+                  avatarUrl: undefined,
+                }
+                collaborators.set(userId, updatedCollaborator)
+                hasChanges = true
+              }
+            })
+
+            if (hasChanges) {
+              collaboratorsMapRef.current = collaborators
+              excalidrawRef.current.updateScene({
+                collaborators: collaborators,
+              })
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching collaborator profiles:', err)
+      }
+    }
+
     // Listen for presence sync events (Task 9.1)
     channel.on('presence', { event: 'sync' }, () => {
       const state = channel.presenceState()
@@ -605,6 +666,10 @@ export function ExcalidrawWrapper({
         return acc
       }, [] as Array<{ user_id: string; email: string; online_at: string }>)
       setOnlineUsers(uniqueUsers)
+
+      // Fetch profiles for all online users
+      const userIds = uniqueUsers.map(u => u.user_id)
+      fetchCollaboratorProfiles(userIds)
 
       // Clean up cursors for users who are no longer present
       if (excalidrawRef.current) {
@@ -662,37 +727,28 @@ export function ExcalidrawWrapper({
           // Update collaborators Map with remote cursor position
           const collaborators = new Map(collaboratorsMapRef.current)
           
-          // Generate a consistent color for this user based on their ID
-          const getUserColor = (userId: string): string => {
-            const colors = [
-              '#3b82f6', // blue
-              '#10b981', // green
-              '#8b5cf6', // purple
-              '#ec4899', // pink
-              '#eab308', // yellow
-              '#6366f1', // indigo
-              '#ef4444', // red
-              '#14b8a6', // teal
-            ]
-            let hash = 0
-            for (let i = 0; i < userId.length; i++) {
-              hash = userId.charCodeAt(i) + ((hash << 5) - hash)
-            }
-            return colors[Math.abs(hash) % colors.length]
+          // Get display name from profile or email
+          const getDisplayName = (userId: string, email: string): string => {
+            const profile = collaboratorProfilesRef.current.get(userId)
+            return profile?.screen_name || email
           }
 
           // Get or create collaborator entry
           let collaborator = collaborators.get(payload.userId)
+          const profile = collaboratorProfilesRef.current.get(payload.userId)
+          
           if (!collaborator) {
             // New collaborator - create entry
             collaborator = {
-              username: payload.email || 'Unknown',
+              username: getDisplayName(payload.userId, payload.email || 'Unknown'),
               pointer: payload.pointer,
               button: payload.button || 'up',
               selectedElementIds: payload.selectedElementIds || [],
               userState: 'ACTIVE',
               isCurrentUser: false,
-              // Generate avatar color based on user ID
+              // Note: Excalidraw doesn't support custom collaborator colors via API
+              // Colors are auto-generated internally by Excalidraw based on collaborator order
+              // Don't set avatarUrl - we want to use color as background
               avatarUrl: undefined,
             }
           } else {
@@ -701,6 +757,10 @@ export function ExcalidrawWrapper({
             collaborator.button = payload.button || 'up'
             collaborator.selectedElementIds = payload.selectedElementIds || []
             collaborator.userState = 'ACTIVE'
+            // Update username if profile is available
+            if (profile) {
+              collaborator.username = profile.screen_name || collaborator.username
+            }
           }
 
           collaborators.set(payload.userId, collaborator)
