@@ -536,10 +536,8 @@
       {
         "id": 10,
         "title": "Deployment Configuration",
-        "description": "Docker setup, health checks, and production configuration",
-        "details": "Dockerfile: multi-stage FROM node:20-alpine, COPY ., npm ci --only=production, npm run build, CMD ['npm', 'start']; docker-compose.yml with app service port 3000; app/api/health/route.ts: GET returns {status:'ok', timestamp:new Date().toISOString()}; Update README.md with complete setup instructions, env vars, Supabase migration steps",
-        "testStrategy": "docker build -t whiteboard .; docker run -p3000:3000 whiteboard; curl localhost:3000/api/health; Test full flow in Docker container; Verify health endpoint for readiness probes",
-        "priority": "medium",
+        "description": "Vercel deployment, health checks, and production optimizations",
+        "status": "pending",
         "dependencies": [
           1,
           2,
@@ -547,39 +545,78 @@
           4,
           5
         ],
-        "status": "pending",
+        "priority": "medium",
+        "details": "Implement health check endpoint at app/api/health/route.ts: GET returns {status:'ok', timestamp:new Date().toISOString()}; Create vercel.json with security headers and edge settings; Configure Next.js production optimizations in next.config.js; Set up Vercel Analytics for monitoring; Update README.md and create DEPLOYMENT.md with complete setup instructions, env vars, Supabase migration steps, and production best practices",
+        "testStrategy": "Deploy to Vercel preview environment; curl deployed-url/api/health; Test full flow in production environment; Verify health endpoint for monitoring; Run Lighthouse audit to confirm optimizations",
         "subtasks": [
           {
             "id": 1,
-            "title": "Multi-stage Dockerfile and docker-compose.yml setup",
-            "description": "Create optimized multi-stage Dockerfile using node:20-alpine base with production dependencies, build step, and runtime stage; add docker-compose.yml exposing port 3000",
+            "title": "Health check API route implementation",
+            "description": "Implement GET /api/health endpoint in app/api/health/route.ts returning JSON {status:'ok', timestamp: new Date().toISOString()} for Vercel monitoring and uptime checks",
             "dependencies": [],
-            "details": "Implement Dockerfile with stages: base (node:20-alpine), deps (npm ci --only=production), build (npm run build), production (COPY artifacts, CMD ['npm','start'], HEALTHCHECK); docker-compose.yml: single app service with build context, ports: - '3000:3000', healthcheck referencing /api/health[1][2]",
+            "details": "Create Next.js API route handler exporting async GET function; return Response.json({status:'ok', timestamp: new Date().toISOString()}, {status:200}); Ensure lightweight, no database calls for fast monitoring and uptime checks",
             "status": "pending",
-            "testStrategy": "docker build -t whiteboard . && docker run -p3000:3000 whiteboard; docker-compose up; verify container health status healthy"
+            "testStrategy": "curl https://your-vercel-deployment.vercel.app/api/health expects {status:'ok', timestamp:'...'}; Test in development: npm run dev and curl http://localhost:3000/api/health"
           },
           {
             "id": 2,
-            "title": "Health check API route implementation",
-            "description": "Implement GET /api/health endpoint in app/api/health/route.ts returning JSON {status:'ok', timestamp: new Date().toISOString()} for Docker health checks",
-            "dependencies": [
-              1
-            ],
-            "details": "Create Next.js API route handler exporting async GET function; return Response.json({status:'ok', timestamp: new Date().toISOString()}, {status:200}); Ensure lightweight, no database calls for fast readiness/liveness probes",
+            "title": "Vercel configuration setup",
+            "description": "Create vercel.json configuration file with security headers, edge settings, and Next.js optimizations",
+            "dependencies": [],
+            "details": "Create vercel.json with: headers configuration for Content-Security-Policy, X-Content-Type-Options, X-Frame-Options, etc.; Configure edge settings for optimal performance; Set up redirects and rewrites if needed; Add build settings specific to Next.js application",
             "status": "pending",
-            "testStrategy": "curl http://localhost:3000/api/health expects {status:'ok', timestamp:'...'}; Test in Docker: docker run --rm whiteboard wget -qO- http://localhost:3000/api/health || exit 1"
+            "testStrategy": "Deploy to Vercel preview environment; Verify headers using browser dev tools; Check Vercel build logs for optimization confirmation; Test edge functions if implemented"
           },
           {
             "id": 3,
-            "title": "README updates for deployment instructions",
-            "description": "Update README.md with complete Docker setup, env vars, build/run commands, Supabase migration steps, and production configuration",
+            "title": "Next.js production optimizations",
+            "description": "Configure next.config.js with production optimizations for image handling, output settings, and performance",
+            "dependencies": [],
+            "details": "Update next.config.js with: optimized image configuration (formats, domains, sizes); output: 'standalone' for improved build artifacts; Configure appropriate cache settings; Enable appropriate compiler options; Add any necessary experimental features for performance; Configure appropriate runtime settings",
+            "status": "pending",
+            "testStrategy": "Deploy to Vercel with updated config; Run Lighthouse audit to verify performance improvements; Check build logs for optimization confirmations; Verify image optimization working correctly"
+          },
+          {
+            "id": 4,
+            "title": "Production monitoring setup",
+            "description": "Configure Vercel Analytics and error tracking for production monitoring",
             "dependencies": [
               1,
-              2
+              2,
+              3
             ],
-            "details": "Add sections: Prerequisites (Docker, Supabase CLI), Environment Variables (NEXT_PUBLIC_SUPABASE_URL, ANON_KEY), Local Development (docker-compose up), Production Deployment (docker build/push), Supabase Setup (supabase migration up, enable realtime); Include health check verification and common issues\n<info added on 2026-01-20T16:34:09.714Z>\n## Authentication Setup\n\n### Magic Link Authentication\n1. Enable Magic Link authentication in Supabase Dashboard (Authentication → Providers → Email → Enable Magic Link)\n2. Configure redirect URL for magic links: \n   - Development: http://localhost:3000/auth/callback\n   - Production: https://your-domain.com/auth/callback\n3. Add users manually via Supabase UI (Authentication → Users → Add user) - email only, no password required\n\n### Important Notes\n- Authentication is passwordless (magic link only)\n- Users are managed manually via Supabase UI\n- No password authentication or signup functionality is implemented\n</info added on 2026-01-20T16:34:09.714Z>",
+            "details": "Enable Vercel Analytics in project settings; Add @vercel/analytics package and integrate into application; Configure error boundaries and reporting; Set up alerts for critical issues; Document monitoring dashboard access and interpretation",
             "status": "pending",
-            "testStrategy": "Validate README instructions by following them end-to-end; confirm docker-compose up succeeds, health endpoint responds, Supabase migration applies without errors"
+            "testStrategy": "Verify analytics data appears in Vercel dashboard after deployment; Test error tracking by triggering controlled errors; Confirm alert notifications work correctly"
+          },
+          {
+            "id": 5,
+            "title": "README updates for deployment instructions",
+            "description": "Update README.md with complete Vercel setup, env vars, build/run commands, Supabase migration steps, and production configuration",
+            "dependencies": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "details": "Add sections: Prerequisites (Vercel account, Supabase CLI), Environment Variables (NEXT_PUBLIC_SUPABASE_URL, ANON_KEY), Local Development (npm run dev), Production Deployment (Vercel GitHub integration or CLI deployment), Supabase Setup (supabase migration up, enable realtime); Include health check verification and common issues\n<info added on 2026-01-20T16:34:09.714Z>\n## Authentication Setup\n\n### Magic Link Authentication\n1. Enable Magic Link authentication in Supabase Dashboard (Authentication → Providers → Email → Enable Magic Link)\n2. Configure redirect URL for magic links: \n   - Development: http://localhost:3000/auth/callback\n   - Production: https://your-domain.com/auth/callback\n3. Add users manually via Supabase UI (Authentication → Users → Add user) - email only, no password required\n\n### Important Notes\n- Authentication is passwordless (magic link only)\n- Users are managed manually via Supabase UI\n- No password authentication or signup functionality is implemented\n</info added on 2026-01-20T16:34:09.714Z>",
+            "status": "pending",
+            "testStrategy": "Validate README instructions by following them end-to-end; confirm deployment succeeds, health endpoint responds, Supabase migration applies without errors"
+          },
+          {
+            "id": 6,
+            "title": "Create DEPLOYMENT.md with production best practices",
+            "description": "Create a dedicated DEPLOYMENT.md file with comprehensive production deployment guidelines and best practices",
+            "dependencies": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "details": "Create DEPLOYMENT.md with sections: Vercel deployment workflow, CI/CD setup, environment configuration, domain setup and SSL, monitoring and alerting, performance optimization tips, scaling considerations, rollback procedures, and maintenance guidelines; Include troubleshooting section for common deployment issues",
+            "status": "pending",
+            "testStrategy": "Review document for completeness; Verify all steps can be followed without prior knowledge; Test any scripts or commands included in the documentation"
           }
         ]
       }
