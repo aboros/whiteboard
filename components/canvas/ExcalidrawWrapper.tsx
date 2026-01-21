@@ -8,6 +8,7 @@ import { updateBoard, getBoard } from '@/lib/actions/boards'
 import { ToastManager, type ToastType } from '@/components/ui/Toast'
 import { createClient } from '@/lib/supabase/client'
 import type { RealtimeChannel } from '@supabase/supabase-js'
+import { PresenceAvatars } from '@/components/canvas/PresenceAvatars'
 
 // Type for Excalidraw API ref - using any since Excalidraw types aren't always exported correctly
 // The actual API uses readonly arrays, so we use any to avoid type conflicts
@@ -204,6 +205,9 @@ export function ExcalidrawWrapper({
   const channelRef = useRef<RealtimeChannel | null>(null)
   const previousStatusRef = useRef<string | null>(null)
   const supabase = useMemo(() => createClient(), [])
+  
+  // Presence tracking state
+  const [onlineUsers, setOnlineUsers] = useState<Array<{ user_id: string; email: string; online_at: string }>>([])
   
   // Track last broadcast time to debounce rapid updates during drawing
   const lastBroadcastRef = useRef<number>(0)
@@ -582,6 +586,21 @@ export function ExcalidrawWrapper({
       },
     })
 
+    // Listen for presence sync events (Task 9.1)
+    channel.on('presence', { event: 'sync' }, () => {
+      const state = channel.presenceState()
+      // Deduplicate by user_id (multiple tabs = single presence)
+      const allUsers = Object.values(state).flat() as Array<{ user_id: string; email: string; online_at: string }>
+      const uniqueUsers = allUsers.reduce((acc, user) => {
+        // Only keep first occurrence per user_id
+        if (!acc.find(u => u.user_id === user.user_id)) {
+          acc.push(user)
+        }
+        return acc
+      }, [] as Array<{ user_id: string; email: string; online_at: string }>)
+      setOnlineUsers(uniqueUsers)
+    })
+
     // Listen for broadcast events (scene updates from other users)
     channel.on(
       'broadcast',
@@ -679,6 +698,20 @@ export function ExcalidrawWrapper({
 
       if (status === 'SUBSCRIBED') {
         console.log(`Subscribed to board:${boardSlug}`)
+        
+        // Track user presence on subscribe (Task 9.1)
+        supabase.auth.getUser().then(({ data: { user } }) => {
+          if (user && channel) {
+            channel.track({
+              user_id: user.id,
+              email: user.email || 'Unknown',
+              online_at: new Date().toISOString(),
+            }).catch((error) => {
+              console.error('Failed to track presence:', error)
+            })
+          }
+        })
+        
         // On initial subscription, also sync from database to ensure we have latest state
         if (!previousStatusRef.current) {
           syncFromDatabase()
@@ -890,6 +923,9 @@ export function ExcalidrawWrapper({
             </span>
           )}
         </div>
+
+        {/* Presence indicators (Task 9) */}
+        <PresenceAvatars onlineUsers={onlineUsers} />
 
         <div className="w-full h-full">
           <Excalidraw

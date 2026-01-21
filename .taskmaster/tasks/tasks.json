@@ -509,7 +509,7 @@
           4,
           8
         ],
-        "status": "pending",
+        "status": "done",
         "subtasks": [
           {
             "id": 1,
@@ -517,7 +517,7 @@
             "description": "Implement Supabase presence tracking on the existing realtime channel for board pages including sync event handling and user tracking on subscribe",
             "dependencies": [],
             "details": "Add channel.on('presence', {event:'sync'}, ()=>setOnlineUsers(Object.values(channel.presenceState()).flat())) to handle presence state sync. On channel.subscribe(), call channel.track({user_id:user.id, email:user.email, online_at:new Date().toISOString()}) to register user presence. Ensure integration with existing board channel `board:${slug}` from Task 8.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Verify presence events fire on join/leave; check setOnlineUsers populates correctly; test multiple users show in presenceState()"
           },
           {
@@ -528,7 +528,7 @@
               1
             ],
             "details": "Display emails or avatars from onlineUsers state in UI corner. Implement deduplication by user_id (filter Object.values(channel.presenceState()) to unique user_ids). Use PresenceAvatars.tsx with props for onlineUsers array. Style as small corner overlay with Tailwind.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Multiple tabs same user→shows once; different users→all visible; tab close→removes instantly; emails display correctly in corner UI"
           }
         ]
@@ -586,7 +586,7 @@
     ],
     "metadata": {
       "created": "2026-01-20T15:29:39.230Z",
-      "updated": "2026-01-21T11:51:43.042Z",
+      "updated": "2026-01-21T11:54:13.875Z",
       "description": "Tasks for master context"
     }
   }
