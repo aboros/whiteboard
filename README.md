@@ -4,12 +4,17 @@ A collaborative whiteboard application built with Next.js, Excalidraw, and Supab
 
 To keep things very tidy:  
 - Users can only be added via the Supabase UI.  
-- All users can see and edit all boards  
+- Boards are private by default and only visible to their owners
+- Board owners can share boards with other users by email
+- Boards can be made public for read-only access by anyone  
 
 ## Features
 
 - 🔐 Magic link authentication (passwordless)
 - 📝 Create and manage multiple whiteboards
+- 🔒 Private boards by default (only visible to owners)
+- 👥 Share boards with other users by email
+- 🌐 Make boards public for read-only access
 - 🎨 Real-time collaborative drawing with Excalidraw
 - 💾 Auto-save functionality
 - 👥 Multi-user presence tracking
@@ -122,46 +127,191 @@ CREATE TABLE IF NOT EXISTS boards (
   elements JSONB DEFAULT '[]'::jsonb,
   app_state JSONB DEFAULT '{}'::jsonb,
   created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  is_public BOOLEAN DEFAULT FALSE NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Create index on slug for fast lookups
+-- Create indexes for fast lookups
 CREATE INDEX IF NOT EXISTS idx_boards_slug ON boards(slug);
-
--- Create index on created_by for user's boards
 CREATE INDEX IF NOT EXISTS idx_boards_created_by ON boards(created_by);
+CREATE INDEX IF NOT EXISTS idx_boards_is_public ON boards(is_public) WHERE is_public = TRUE;
+
+-- Create board_shares table for sharing functionality
+CREATE TABLE IF NOT EXISTS board_shares (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  board_id UUID NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+  shared_with_user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  shared_by_user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  -- Prevent duplicate shares
+  UNIQUE(board_id, shared_with_user_id)
+);
+
+-- Create indexes for board_shares
+CREATE INDEX IF NOT EXISTS idx_board_shares_board_id ON board_shares(board_id);
+CREATE INDEX IF NOT EXISTS idx_board_shares_shared_with_user_id ON board_shares(shared_with_user_id);
+CREATE INDEX IF NOT EXISTS idx_board_shares_shared_by_user_id ON board_shares(shared_by_user_id);
 
 -- Enable Row Level Security
 ALTER TABLE boards ENABLE ROW LEVEL SECURITY;
+ALTER TABLE board_shares ENABLE ROW LEVEL SECURITY;
 
--- Policy: Users can view all boards
-CREATE POLICY "Users can view all boards"
+-- ============================================
+-- RLS Policies for boards
+-- ============================================
+
+-- Policy: Authenticated users can view boards they own, are shared with them, or are public
+CREATE POLICY "Authenticated users can view owned or shared boards"
   ON boards FOR SELECT
   TO authenticated
-  USING (true);
+  USING (
+    created_by = auth.uid()
+    OR
+    EXISTS (
+      SELECT 1 FROM board_shares
+      WHERE board_shares.board_id = boards.id
+      AND board_shares.shared_with_user_id = auth.uid()
+    )
+    OR
+    is_public = TRUE
+  );
 
--- Policy: Users can create boards
-CREATE POLICY "Users can create boards"
+-- Policy: Anonymous users can view public boards (read-only)
+CREATE POLICY "Anonymous users can view public boards"
+  ON boards FOR SELECT
+  TO anon
+  USING (is_public = TRUE);
+
+-- Policy: Authenticated users can create boards
+CREATE POLICY "Authenticated users can insert boards"
   ON boards FOR INSERT
   TO authenticated
-  WITH CHECK (true);
+  WITH CHECK (auth.role() = 'authenticated');
 
--- Policy: Users can update their own boards
-CREATE POLICY "Users can update their own boards"
+-- Policy: Users can update boards they own or are shared with them
+CREATE POLICY "Users can update owned or shared boards"
   ON boards FOR UPDATE
   TO authenticated
-  USING (created_by = auth.uid())
-  WITH CHECK (created_by = auth.uid());
+  USING (
+    created_by = auth.uid()
+    OR
+    EXISTS (
+      SELECT 1 FROM board_shares
+      WHERE board_shares.board_id = boards.id
+      AND board_shares.shared_with_user_id = auth.uid()
+    )
+  )
+  WITH CHECK (
+    created_by = auth.uid()
+    OR
+    EXISTS (
+      SELECT 1 FROM board_shares
+      WHERE board_shares.board_id = boards.id
+      AND board_shares.shared_with_user_id = auth.uid()
+    )
+  );
 
--- Policy: Users can delete their own boards
-CREATE POLICY "Users can delete their own boards"
+-- Policy: Only board owners can delete boards
+CREATE POLICY "Authenticated users can delete their own boards"
   ON boards FOR DELETE
   TO authenticated
   USING (created_by = auth.uid());
 
--- Create function to update updated_at timestamp
--- SECURITY: Set search_path to prevent search_path manipulation attacks
+-- ============================================
+-- RLS Policies for board_shares
+-- ============================================
+
+-- Policy: Users can view shares where they are the recipient or creator
+CREATE POLICY "Users can view their shares"
+  ON board_shares FOR SELECT
+  TO authenticated
+  USING (
+    shared_with_user_id = auth.uid()
+    OR
+    shared_by_user_id = auth.uid()
+  );
+
+-- Policy: Users can create shares for boards they own
+CREATE POLICY "Users can create shares they own"
+  ON board_shares FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    shared_by_user_id = auth.uid()
+    AND check_board_ownership(board_id, auth.uid())
+  );
+
+-- Policy: Users can delete shares they created
+CREATE POLICY "Users can delete shares they created"
+  ON board_shares FOR DELETE
+  TO authenticated
+  USING (shared_by_user_id = auth.uid());
+
+-- ============================================
+-- Helper Functions
+-- ============================================
+
+-- Function to check if user owns a board (bypasses RLS to avoid recursion)
+CREATE OR REPLACE FUNCTION check_board_ownership(board_uuid UUID, user_uuid UUID)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.boards
+    WHERE id = board_uuid
+    AND created_by = user_uuid
+  );
+END;
+$$;
+
+-- Function to get user by email (for sharing functionality)
+CREATE OR REPLACE FUNCTION get_user_by_email(user_email TEXT)
+RETURNS TABLE (
+  id UUID,
+  email TEXT
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    au.id::UUID,
+    au.email::TEXT
+  FROM auth.users au
+  WHERE au.email = user_email;
+END;
+$$;
+
+-- Function to get shared users for a board with their emails
+CREATE OR REPLACE FUNCTION get_board_shared_users(board_uuid UUID)
+RETURNS TABLE (
+  user_id UUID,
+  user_email TEXT,
+  shared_at TIMESTAMPTZ
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    bs.shared_with_user_id::UUID,
+    au.email::TEXT,
+    bs.created_at::TIMESTAMPTZ
+  FROM public.board_shares bs
+  JOIN auth.users au ON au.id = bs.shared_with_user_id
+  WHERE bs.board_id = board_uuid
+  ORDER BY bs.created_at DESC;
+END;
+$$;
+
+-- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at()
 RETURNS TRIGGER
 LANGUAGE plpgsql
