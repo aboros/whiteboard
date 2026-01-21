@@ -161,19 +161,24 @@ CREATE POLICY "Users can delete their own boards"
   USING (created_by = auth.uid());
 
 -- Create function to update updated_at timestamp
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
+-- SECURITY: Set search_path to prevent search_path manipulation attacks
+CREATE OR REPLACE FUNCTION update_updated_at()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
 BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 -- Create trigger to automatically update updated_at
-CREATE TRIGGER update_boards_updated_at
+CREATE TRIGGER boards_updated_at
   BEFORE UPDATE ON boards
   FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
+  EXECUTE FUNCTION update_updated_at();
 ```
 
 ## Deployment
