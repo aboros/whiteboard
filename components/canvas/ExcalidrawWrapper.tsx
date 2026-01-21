@@ -4,8 +4,10 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import { useDebouncedCallback } from 'use-debounce'
 import '@excalidraw/excalidraw/index.css'
-import { updateBoard } from '@/lib/actions/boards'
+import { updateBoard, getBoard } from '@/lib/actions/boards'
 import { ToastManager, type ToastType } from '@/components/ui/Toast'
+import { createClient } from '@/lib/supabase/client'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 
 // Type for Excalidraw API ref - using any since Excalidraw types aren't always exported correctly
 // The actual API uses readonly arrays, so we use any to avoid type conflicts
@@ -63,6 +65,100 @@ function validateExcalidrawData(elements: any[], appState: any): {
   return { valid: true }
 }
 
+/**
+ * Filters appState to only include properties that should be shared across clients.
+ * Excludes all viewport/UI state (zoom, pan, scroll, tool selection, color picker, etc.).
+ * Only includes canvas-level properties that are part of the drawing itself.
+ * 
+ * Note: For now, we exclude ALL appState from broadcasts since viewport state
+ * (zoom, pan, scroll) should be independent per collaborator, and most other
+ * appState is UI-only. Only elements are broadcasted.
+ */
+function filterSharedAppState(appState: any): any {
+  // Don't broadcast any appState - each collaborator should have independent:
+  // - Viewport (zoom, pan, scroll)
+  // - Tool selection
+  // - Color picker
+  // - UI state
+  // 
+  // If we need to share canvas-level properties in the future (like viewBackgroundColor
+  // or gridSize), we can add them here, but for now we keep it minimal.
+  return {}
+}
+
+/**
+ * Conflict resolution: Last-write-wins per element ID (Subtask 8.3)
+ * Merges remote elements with local elements, keeping the latest version of each element by ID
+ * Based on excalidraw-room pattern: prefer higher version numbers (newer elements)
+ */
+function mergeElementsByLastWrite(
+  localElements: any[],
+  remoteElements: any[]
+): any[] {
+  const getVersion = (el: any): number => {
+    // Excalidraw elements have a version property that increments with each update
+    const v = el?.version
+    if (typeof v === 'number' && Number.isFinite(v)) {
+      return v
+    }
+    // If no version, check for updated timestamp or default to 0
+    if (el?.updated) {
+      return el.updated
+    }
+    return 0
+  }
+
+  // Create a map of remote elements by ID
+  const remoteMap = new Map<string, any>()
+  remoteElements.forEach((el) => {
+    if (el && el.id) {
+      remoteMap.set(el.id, el)
+    }
+  })
+
+  // Update or add remote elements to local
+  const merged: any[] = []
+  const processedIds = new Set<string>()
+
+  // First, process local elements
+  localElements.forEach((localEl) => {
+    if (!localEl || !localEl.id) {
+      return
+    }
+
+    const remoteEl = remoteMap.get(localEl.id)
+    if (remoteEl) {
+      // Element exists in both - prefer the one with higher version
+      // This handles out-of-order network updates correctly
+      const localVersion = getVersion(localEl)
+      const remoteVersion = getVersion(remoteEl)
+      
+      // Only use remote if it's actually newer (strictly greater)
+      // If versions are equal, prefer local to avoid unnecessary updates
+      if (remoteVersion > localVersion) {
+        merged.push(remoteEl)
+      } else {
+        merged.push(localEl)
+      }
+      processedIds.add(localEl.id)
+      remoteMap.delete(localEl.id)
+    } else {
+      // Element only exists locally - keep it
+      merged.push(localEl)
+      processedIds.add(localEl.id)
+    }
+  })
+
+  // Add new remote-only elements
+  remoteMap.forEach((remoteEl) => {
+    if (!processedIds.has(remoteEl.id)) {
+      merged.push(remoteEl)
+    }
+  })
+
+  return merged
+}
+
 interface RetryQueueItem {
   elements: any[]
   appState: any
@@ -97,9 +193,22 @@ export function ExcalidrawWrapper({
   // Flag to prevent onChange loops when we're updating from our own state changes
   const isUpdatingFromStateRef = useRef(false)
   
+  // Flag to prevent broadcasting our own updates (when we receive a remote update)
+  const isApplyingRemoteUpdateRef = useRef(false)
+  
   // Use refs to track current values without causing re-renders
   const currentElementsRef = useRef<any[]>([])
   const currentAppStateRef = useRef<any>({})
+  
+  // Realtime channel ref
+  const channelRef = useRef<RealtimeChannel | null>(null)
+  const previousStatusRef = useRef<string | null>(null)
+  const supabase = useMemo(() => createClient(), [])
+  
+  // Track last broadcast time to debounce rapid updates during drawing
+  const lastBroadcastRef = useRef<number>(0)
+  const broadcastTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const BROADCAST_DEBOUNCE_MS = 50 // Debounce broadcasts by 50ms during drawing
 
   // Sanitize appState to ensure Excalidraw compatibility
   const sanitizeAppState = useCallback((appState: any): any => {
@@ -384,10 +493,236 @@ export function ExcalidrawWrapper({
     }
   }, [processRetryQueue])
 
+  // Sync from database on reconnect (Subtask 8.4)
+  const syncFromDatabase = useCallback(async () => {
+    if (!excalidrawRef.current) {
+      return
+    }
+
+    try {
+      const result = await getBoard(boardSlug)
+      if (result.error || !result.data) {
+        console.error('Failed to fetch board on reconnect:', result.error)
+        return
+      }
+
+      const board = result.data
+      const dbElements = Array.isArray(board.elements) ? board.elements : []
+      const dbAppState =
+        board.app_state && typeof board.app_state === 'object'
+          ? board.app_state
+          : {}
+
+      // Get current local elements
+      const currentLocalElements =
+        excalidrawRef.current.getSceneElementsIncludingDeleted() || []
+
+      // Merge database state with local state (last-write-wins)
+      const mergedElements = mergeElementsByLastWrite(
+        currentLocalElements,
+        dbElements
+      )
+
+      // Merge appState: preserve local collaborators Map (it's UI state, not drawing state)
+      const localAppState = currentAppStateRef.current || {}
+      const mergedAppState = {
+        ...dbAppState,
+        // Preserve local collaborators - it's UI state that shouldn't be overwritten by DB sync
+        collaborators: localAppState.collaborators || undefined,
+      }
+      
+      // If collaborators is undefined, remove the property entirely
+      if (mergedAppState.collaborators === undefined) {
+        delete mergedAppState.collaborators
+      }
+
+      // Apply merged state to Excalidraw
+      isApplyingRemoteUpdateRef.current = true
+      excalidrawRef.current.updateScene({
+        elements: mergedElements,
+        appState: mergedAppState,
+      })
+
+      // Update refs
+      currentElementsRef.current = mergedElements
+      currentAppStateRef.current = mergedAppState
+
+      // Update lastSavedElementsRef since these elements came from the database
+      // (they're already saved). This prevents marking as dirty unnecessarily.
+      lastSavedElementsRef.current = JSON.parse(JSON.stringify(mergedElements))
+      // Don't mark as dirty since these are already saved in the database
+      setIsDirty(false)
+
+      setTimeout(() => {
+        isApplyingRemoteUpdateRef.current = false
+      }, 100)
+
+      console.log('Synced from database on reconnect')
+    } catch (error) {
+      console.error('Error syncing from database:', error)
+    }
+  }, [boardSlug])
+
+  // Realtime channel setup and broadcast listeners (Subtask 8.1)
+  // Set up channel after Excalidraw is mounted
+  useEffect(() => {
+    if (!supabase) {
+      return
+    }
+
+    // Wait for Excalidraw API to be available (it's set via excalidrawAPI prop callback)
+    // We'll set up the channel, but handlers will check for excalidrawRef.current
+
+    // Create channel for this board
+    // Note: self: false means we don't receive our own broadcasts, preventing
+    // older updates from overwriting newer local state (excalidraw-room pattern)
+    const channel = supabase.channel(`board:${boardSlug}`, {
+      config: {
+        broadcast: { self: false }, // Don't receive our own broadcasts
+      },
+    })
+
+    // Listen for broadcast events (scene updates from other users)
+    channel.on(
+      'broadcast',
+      { event: 'scene-update' },
+      ({ payload }: { payload: { elements: any[]; appState: any } }) => {
+        // Prevent applying our own updates (we'll handle this via isApplyingRemoteUpdateRef)
+        if (isApplyingRemoteUpdateRef.current) {
+          return
+        }
+
+        // Apply remote update to Excalidraw with conflict resolution (Subtask 8.3)
+        if (excalidrawRef.current && payload) {
+          try {
+            // Set flag to prevent onChange from broadcasting this update
+            isApplyingRemoteUpdateRef.current = true
+
+            // Get current local elements from Excalidraw
+            const currentLocalElements =
+              excalidrawRef.current.getSceneElementsIncludingDeleted() || []
+
+            // Merge remote elements with local using last-write-wins per element ID
+            const mergedElements = mergeElementsByLastWrite(
+              currentLocalElements,
+              payload.elements || []
+            )
+
+            // Merge appState: preserve local UI state (tool selection, color picker, etc.)
+            // and local collaborators Map. Only apply shared appState from remote.
+            // Excalidraw expects collaborators to be a Map or undefined
+            const localAppState = currentAppStateRef.current || {}
+            const remoteAppState = payload.appState || {}
+            
+            // Merge: remote shared appState + local UI state + local collaborators
+            // This ensures tool selection, color picker, etc. remain local-only
+            const mergedAppState = {
+              ...localAppState,  // Start with local state (preserves UI preferences)
+              ...remoteAppState,  // Overlay shared state from remote (zoom, viewport, etc.)
+              // Preserve local collaborators - it's UI state that shouldn't be overwritten by remote updates
+              collaborators: localAppState.collaborators || undefined,
+            }
+            
+            // If collaborators is undefined, remove the property entirely
+            if (mergedAppState.collaborators === undefined) {
+              delete mergedAppState.collaborators
+            }
+
+            // Update scene with merged elements and appState
+            excalidrawRef.current.updateScene({
+              elements: mergedElements,
+              appState: mergedAppState,
+            })
+
+            // Update our refs to track the new merged state
+            currentElementsRef.current = mergedElements
+            currentAppStateRef.current = mergedAppState
+
+            // IMPORTANT: Update lastSavedElementsRef to reflect that these elements
+            // are already saved (they came from another client who has saved them).
+            // This prevents marking the state as dirty when onChange fires after
+            // applying the remote update.
+            // Only update if the merged elements differ from what we currently have saved
+            // to avoid unnecessary updates
+            const currentSaved = lastSavedElementsRef.current
+            if (elementsChanged(mergedElements, currentSaved)) {
+              lastSavedElementsRef.current = JSON.parse(JSON.stringify(mergedElements))
+              // Don't mark as dirty since these are already saved by another client
+              setIsDirty(false)
+            }
+
+            // Reset flag after a short delay to allow Excalidraw to process
+            setTimeout(() => {
+              isApplyingRemoteUpdateRef.current = false
+            }, 100)
+          } catch (error) {
+            console.error('Failed to apply remote update:', error)
+            isApplyingRemoteUpdateRef.current = false
+          }
+        }
+      }
+    )
+
+    // Subscribe to the channel
+    channel.subscribe((status) => {
+      // Detect reconnection: if we were CLOSED/TIMED_OUT and now SUBSCRIBED
+      if (
+        previousStatusRef.current &&
+        (previousStatusRef.current === 'CLOSED' ||
+          previousStatusRef.current === 'TIMED_OUT') &&
+        status === 'SUBSCRIBED'
+      ) {
+        console.log('Reconnected - syncing from database')
+        // Sync from database on reconnect
+        syncFromDatabase()
+      }
+
+      if (status === 'SUBSCRIBED') {
+        console.log(`Subscribed to board:${boardSlug}`)
+        // On initial subscription, also sync from database to ensure we have latest state
+        if (!previousStatusRef.current) {
+          syncFromDatabase()
+        }
+      } else if (status === 'CHANNEL_ERROR') {
+        console.error('Channel error:', status)
+        addToast('Connection error. Reconnecting...', 'error')
+      } else if (status === 'TIMED_OUT') {
+        console.warn('Channel timed out')
+        addToast('Connection timed out. Reconnecting...', 'info')
+      } else if (status === 'CLOSED') {
+        console.log('Channel closed')
+      }
+
+      previousStatusRef.current = status
+    })
+
+    channelRef.current = channel
+
+    // Cleanup on unmount
+    return () => {
+      // Clear any pending broadcast
+      if (broadcastTimeoutRef.current) {
+        clearTimeout(broadcastTimeoutRef.current)
+        broadcastTimeoutRef.current = null
+      }
+      
+      if (channelRef.current) {
+        channelRef.current.unsubscribe()
+        supabase.removeChannel(channelRef.current)
+        channelRef.current = null
+      }
+    }
+  }, [boardSlug, supabase, addToast, syncFromDatabase])
+
   const handleChange = useCallback(
     (elements: readonly any[], appState: any, files?: any) => {
       // Prevent infinite loops - if we're updating from our own state change, ignore
       if (isUpdatingFromStateRef.current) {
+        return
+      }
+
+      // Don't broadcast if we're applying a remote update
+      if (isApplyingRemoteUpdateRef.current) {
         return
       }
 
@@ -411,9 +746,67 @@ export function ExcalidrawWrapper({
         // Sanitize appState before saving (remove collaborators Map which can't be serialized)
         const sanitizedAppState = { ...appState }
         // Remove collaborators from saved state (it's a Map and not serializable)
-        // We'll handle real-time collaboration separately in Task 8
         if (sanitizedAppState.collaborators) {
           delete sanitizedAppState.collaborators
+        }
+
+        // Broadcast scene update to other users (Subtask 8.2)
+        // Only broadcast elements and shared appState (not UI-only state like tool selection)
+        // Debounce broadcasts to avoid spamming during active drawing
+        // This matches excalidraw-room pattern of batching updates
+        if (channelRef.current) {
+          const now = Date.now()
+          const timeSinceLastBroadcast = now - lastBroadcastRef.current
+          
+          // Clear any pending broadcast
+          if (broadcastTimeoutRef.current) {
+            clearTimeout(broadcastTimeoutRef.current)
+            broadcastTimeoutRef.current = null
+          }
+          
+          // If we've broadcast recently, debounce it
+          if (timeSinceLastBroadcast < BROADCAST_DEBOUNCE_MS) {
+            // Schedule a debounced broadcast
+            broadcastTimeoutRef.current = setTimeout(() => {
+              if (channelRef.current) {
+                try {
+                  // Filter appState to only include shared properties (exclude UI-only state)
+                  const sharedAppState = filterSharedAppState(currentAppStateRef.current)
+                  
+                  channelRef.current.send({
+                    type: 'broadcast',
+                    event: 'scene-update',
+                    payload: {
+                      elements: currentElementsRef.current,
+                      appState: sharedAppState,
+                    },
+                  })
+                  lastBroadcastRef.current = Date.now()
+                } catch (error) {
+                  console.error('Failed to broadcast scene update:', error)
+                }
+              }
+              broadcastTimeoutRef.current = null
+            }, BROADCAST_DEBOUNCE_MS - timeSinceLastBroadcast)
+          } else {
+            // Broadcast immediately
+            try {
+              // Filter appState to only include shared properties (exclude UI-only state)
+              const sharedAppState = filterSharedAppState(sanitizedAppState)
+              
+              channelRef.current.send({
+                type: 'broadcast',
+                event: 'scene-update',
+                payload: {
+                  elements: mutableElements,
+                  appState: sharedAppState,
+                },
+              })
+              lastBroadcastRef.current = now
+            } catch (error) {
+              console.error('Failed to broadcast scene update:', error)
+            }
+          }
         }
 
         // Mark as dirty (this is safe - it only updates save status UI)
@@ -472,7 +865,7 @@ export function ExcalidrawWrapper({
 
   return (
     <>
-      <div className="w-screen h-screen fixed top-0 left-0 right-0 bottom-0">
+      <div className="w-screen h-screen fixed top-0 left-0 right-0 bottom-0 overflow-hidden z-10">
         {/* Save status indicator */}
         <div className="fixed top-4 left-4 z-50 flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 shadow-lg">
           {isSaving ? (
@@ -498,13 +891,15 @@ export function ExcalidrawWrapper({
           )}
         </div>
 
-        <Excalidraw
-          excalidrawAPI={(api) => {
-            excalidrawRef.current = api
-          }}
-          initialData={initialDataRef.current || { elements: [], appState: {} }}
-          onChange={handleChange}
-        />
+        <div className="w-full h-full">
+          <Excalidraw
+            excalidrawAPI={(api) => {
+              excalidrawRef.current = api
+            }}
+            initialData={initialDataRef.current || { elements: [], appState: {} }}
+            onChange={handleChange}
+          />
+        </div>
       </div>
 
       {/* Toast notifications */}
