@@ -899,33 +899,36 @@ export function ExcalidrawWrapper({
   return (
     <>
       <div className="w-screen h-screen fixed top-0 left-0 right-0 bottom-0 overflow-hidden z-10">
-        {/* Save status indicator */}
-        <div className="fixed top-4 left-4 z-50 flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 shadow-lg">
-          {isSaving ? (
-            <>
-              <div className="inline-block animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
-              <span className="text-sm text-gray-700 dark:text-gray-300">Saving...</span>
-            </>
-          ) : isDirty ? (
-            <>
-              <div className="h-3 w-3 rounded-full bg-yellow-500"></div>
-              <span className="text-sm text-gray-700 dark:text-gray-300">Unsaved changes</span>
-            </>
-          ) : (
-            <>
-              <div className="h-3 w-3 rounded-full bg-green-500"></div>
-              <span className="text-sm text-gray-700 dark:text-gray-300">Saved</span>
-            </>
-          )}
-          {!isOnline && (
-            <span className="text-xs text-orange-600 dark:text-orange-400 ml-2">
-              (Offline)
-            </span>
-          )}
-        </div>
+        {/* Right side indicators container - Vertically centered */}
+        <div className="fixed right-4 top-1/2 -translate-y-1/2 z-50 flex flex-col gap-3">
+          {/* Save status indicator */}
+          <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 shadow-lg">
+            {isSaving ? (
+              <>
+                <div className="inline-block animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                <span className="text-sm text-gray-700 dark:text-gray-300">Saving...</span>
+              </>
+            ) : isDirty ? (
+              <>
+                <div className="h-3 w-3 rounded-full bg-yellow-500"></div>
+                <span className="text-sm text-gray-700 dark:text-gray-300">Unsaved changes</span>
+              </>
+            ) : (
+              <>
+                <div className="h-3 w-3 rounded-full bg-green-500"></div>
+                <span className="text-sm text-gray-700 dark:text-gray-300">Saved</span>
+              </>
+            )}
+            {!isOnline && (
+              <span className="text-xs text-orange-600 dark:text-orange-400 ml-2">
+                (Offline)
+              </span>
+            )}
+          </div>
 
-        {/* Presence indicators (Task 9) */}
-        <PresenceAvatars onlineUsers={onlineUsers} />
+          {/* Presence indicators (Task 9) */}
+          <PresenceAvatars onlineUsers={onlineUsers} />
+        </div>
 
         <div className="w-full h-full">
           <Excalidraw

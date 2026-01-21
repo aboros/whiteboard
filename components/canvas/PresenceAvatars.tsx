@@ -50,7 +50,7 @@ export function PresenceAvatars({ onlineUsers }: PresenceAvatarsProps) {
   }
 
   return (
-    <div className="fixed top-4 right-4 z-50 flex flex-col gap-2">
+    <div className="flex flex-col gap-2">
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 shadow-lg">
         <div className="text-xs text-gray-500 dark:text-gray-400 mb-2 font-medium">
           Online ({onlineUsers.length})
