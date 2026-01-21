@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { SupabaseProvider } from "@/components/providers/SupabaseProvider";
 import { Header } from "@/components/layout/Header";
+import { BoardStatusProvider } from "@/components/canvas/BoardStatusContext";
 
 export const metadata: Metadata = {
   title: "Whiteboard",
@@ -23,8 +24,10 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <SupabaseProvider>
-          <Header />
-          {children}
+          <BoardStatusProvider>
+            <Header />
+            {children}
+          </BoardStatusProvider>
         </SupabaseProvider>
       </body>
     </html>

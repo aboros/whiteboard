@@ -8,7 +8,7 @@ import { updateBoard, getBoard } from '@/lib/actions/boards'
 import { ToastManager, type ToastType } from '@/components/ui/Toast'
 import { createClient } from '@/lib/supabase/client'
 import type { RealtimeChannel } from '@supabase/supabase-js'
-import { PresenceAvatars } from '@/components/canvas/PresenceAvatars'
+import { useBoardStatus } from './BoardStatusContext'
 
 // Type for Excalidraw API ref - using any since Excalidraw types aren't always exported correctly
 // The actual API uses readonly arrays, so we use any to avoid type conflicts
@@ -20,7 +20,7 @@ const Excalidraw = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex items-center justify-center h-screen w-screen bg-gray-50 dark:bg-gray-900">
+      <div className="flex items-center justify-center h-full w-full bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white mb-4"></div>
           <p className="text-gray-600 dark:text-gray-400">Loading canvas...</p>
@@ -179,10 +179,8 @@ export function ExcalidrawWrapper({
   const [hasError, setHasError] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   
-  // Auto-save state
-  const [isDirty, setIsDirty] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
-  const [isOnline, setIsOnline] = useState(true)
+  // Use context for save/online status
+  const { isDirty, isSaving, isOnline, setIsDirty, setIsSaving, setIsOnline, setOnlineUsers } = useBoardStatus()
   const [toasts, setToasts] = useState<Array<{ id: string; message: string; type: ToastType }>>([])
   const retryQueueRef = useRef<RetryQueueItem[]>([])
   const RETRY_QUEUE_KEY = useMemo(() => `retry-queue-${boardSlug}`, [boardSlug])
@@ -206,8 +204,7 @@ export function ExcalidrawWrapper({
   const previousStatusRef = useRef<string | null>(null)
   const supabase = useMemo(() => createClient(), [])
   
-  // Presence tracking state
-  const [onlineUsers, setOnlineUsers] = useState<Array<{ user_id: string; email: string; online_at: string }>>([])
+  // Online users are now managed via context (no local state needed)
   
   // Track last broadcast time to debounce rapid updates during drawing
   const lastBroadcastRef = useRef<number>(0)
@@ -590,10 +587,11 @@ export function ExcalidrawWrapper({
     channel.on('presence', { event: 'sync' }, () => {
       const state = channel.presenceState()
       // Deduplicate by user_id (multiple tabs = single presence)
-      const allUsers = Object.values(state).flat() as Array<{ user_id: string; email: string; online_at: string }>
+      // Type assertion needed because Supabase presence state type is generic
+      const allUsers = (Object.values(state).flat() as unknown) as Array<{ user_id: string; email: string; online_at: string }>
       const uniqueUsers = allUsers.reduce((acc, user) => {
         // Only keep first occurrence per user_id
-        if (!acc.find(u => u.user_id === user.user_id)) {
+        if (user && user.user_id && !acc.find(u => u.user_id === user.user_id)) {
           acc.push(user)
         }
         return acc
@@ -898,38 +896,7 @@ export function ExcalidrawWrapper({
 
   return (
     <>
-      <div className="w-screen h-screen fixed top-0 left-0 right-0 bottom-0 overflow-hidden z-10">
-        {/* Right side indicators container - Vertically centered */}
-        <div className="fixed right-4 top-1/2 -translate-y-1/2 z-50 flex flex-col gap-3">
-          {/* Save status indicator */}
-          <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 shadow-lg">
-            {isSaving ? (
-              <>
-                <div className="inline-block animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
-                <span className="text-sm text-gray-700 dark:text-gray-300">Saving...</span>
-              </>
-            ) : isDirty ? (
-              <>
-                <div className="h-3 w-3 rounded-full bg-yellow-500"></div>
-                <span className="text-sm text-gray-700 dark:text-gray-300">Unsaved changes</span>
-              </>
-            ) : (
-              <>
-                <div className="h-3 w-3 rounded-full bg-green-500"></div>
-                <span className="text-sm text-gray-700 dark:text-gray-300">Saved</span>
-              </>
-            )}
-            {!isOnline && (
-              <span className="text-xs text-orange-600 dark:text-orange-400 ml-2">
-                (Offline)
-              </span>
-            )}
-          </div>
-
-          {/* Presence indicators (Task 9) */}
-          <PresenceAvatars onlineUsers={onlineUsers} />
-        </div>
-
+      <div className="w-full h-full relative overflow-hidden">
         <div className="w-full h-full">
           <Excalidraw
             excalidrawAPI={(api) => {

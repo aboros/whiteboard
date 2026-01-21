@@ -50,32 +50,25 @@ export function PresenceAvatars({ onlineUsers }: PresenceAvatarsProps) {
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 shadow-lg">
-        <div className="text-xs text-gray-500 dark:text-gray-400 mb-2 font-medium">
-          Online ({onlineUsers.length})
+    <div className="flex items-center gap-1.5">
+      {onlineUsers.map((user) => (
+        <div
+          key={user.user_id}
+          className="flex items-center group relative"
+          title={user.email}
+        >
+          {/* Avatar circle with initials */}
+          <div
+            className={`${getUserColor(user.user_id)} w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-medium`}
+          >
+            {getInitials(user.email)}
+          </div>
+          {/* Email tooltip on hover */}
+          <div className="absolute left-0 top-full mt-1 hidden group-hover:block bg-gray-900 dark:bg-gray-700 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-50 pointer-events-none">
+            {user.email}
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {onlineUsers.map((user) => (
-            <div
-              key={user.user_id}
-              className="flex items-center gap-2 group relative"
-              title={user.email}
-            >
-              {/* Avatar circle with initials */}
-              <div
-                className={`${getUserColor(user.user_id)} w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-medium shadow-sm`}
-              >
-                {getInitials(user.email)}
-              </div>
-              {/* Email tooltip on hover */}
-              <div className="absolute left-0 top-full mt-1 hidden group-hover:block bg-gray-900 dark:bg-gray-700 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-50 pointer-events-none">
-                {user.email}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      ))}
     </div>
   )
 }

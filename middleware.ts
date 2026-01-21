@@ -33,6 +33,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
+  // Add pathname to headers for conditional rendering in layout
+  response.headers.set('x-pathname', request.nextUrl.pathname)
+
   return response
 }
 

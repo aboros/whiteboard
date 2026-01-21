@@ -23,11 +23,16 @@ export default async function BoardPage({ params }: BoardPageProps) {
   const appState = board.app_state && typeof board.app_state === 'object' ? board.app_state : {}
 
   return (
-    <ExcalidrawWrapper
-      initialElements={elements}
-      initialAppState={appState}
-      boardSlug={board.slug}
-      boardName={board.name}
-    />
+    <div className="flex flex-col h-[calc(100vh-73px)]">
+      {/* Excalidraw Canvas - fills remaining space below header */}
+      <div className="flex-1 relative overflow-hidden">
+        <ExcalidrawWrapper
+          initialElements={elements}
+          initialAppState={appState}
+          boardSlug={board.slug}
+          boardName={board.name}
+        />
+      </div>
+    </div>
   )
 }
