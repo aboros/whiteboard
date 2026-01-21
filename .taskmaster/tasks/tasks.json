@@ -435,7 +435,7 @@
           6,
           7
         ],
-        "status": "pending",
+        "status": "done",
         "subtasks": [
           {
             "id": 1,
@@ -443,7 +443,7 @@
             "description": "Implement Supabase channel creation, broadcast event listener for scene updates, and subscription in ExcalidrawWrapper component",
             "dependencies": [],
             "details": "Use supabase.channel(`board:${slug}`); Add channel.on('broadcast', {event:'scene-update'}, ({payload})=>excalidrawAPI.updateScene(payload)); Call channel.subscribe(); Ensure proper cleanup on unmount",
-            "status": "in-progress",
+            "status": "done",
             "testStrategy": "Verify channel subscribes successfully; Test listener receives test broadcast message; Check console for subscription status"
           },
           {
@@ -454,7 +454,7 @@
               1
             ],
             "details": "Set onChange=(elements,appState)=>{channel.send({type:'broadcast', event:'scene-update', payload:{elements,appState}})}; Debounce broadcasts if needed; Handle large payloads efficiently",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Draw in one tab→verify broadcast sent; Check network tab for WebSocket messages; Confirm payload structure matches Excalidraw format"
           },
           {
@@ -466,7 +466,7 @@
               2
             ],
             "details": "In updateScene handler: Merge incoming elements by ID, keep latest updated_at per element; Add element.updated_at timestamp; Fallback to full scene replace if conflicts exceed threshold",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Simultaneous edits in 2 tabs→verify no data loss; Test element overwrite by timestamp; Confirm stable sync after conflicts"
           },
           {
@@ -477,7 +477,7 @@
               1
             ],
             "details": "Use channel.subscribe(callback) to detect SUBSCRIBED/CLOSED/TIMED_OUT; On reconnect: fetch board data from Supabase DB; Call excalidrawAPI.updateScene with DB version; Implement exponential backoff\n<info added on 2026-01-21T08:30:35.286Z>\n✅ Completed implementation:\n\n**Reconnect Logic with DB Sync:**\n- Created `syncFromDatabase()` callback function\n- Detects reconnection by tracking subscription status changes\n- Fetches latest board data from database on reconnect\n- Merges database state with local state using conflict resolution\n- Applies merged state to Excalidraw\n\n**Key Implementation Details:**\n- Tracks previous subscription status to detect CLOSED/TIMED_OUT → SUBSCRIBED transitions\n- On initial subscription, also syncs from database to ensure latest state\n- Uses `getBoard()` server action to fetch latest data\n- Applies mergeElementsByLastWrite() to combine DB and local state\n- Sets `isApplyingRemoteUpdateRef` flag during sync to prevent broadcasting\n\n**Reconnection Detection:**\n- Monitors channel subscription status\n- Detects: CLOSED/TIMED_OUT → SUBSCRIBED = reconnection\n- Triggers database sync automatically on reconnection\n\n**Testing Notes:**\n- Network disconnect → reconnect triggers sync correctly\n- Page refresh loads latest state from database\n- No duplicate elements on reconnect\n- Merged state applied correctly\n</info added on 2026-01-21T08:30:35.286Z>",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Network disconnect→reconnect→verify syncs from DB; Test page refresh→loads latest state; Confirm no duplicate elements on reconnect"
           },
           {
@@ -490,8 +490,8 @@
               3,
               4
             ],
-            "details": "Test 2+ tabs same board: draw→instant sync <500ms; Simultaneous edits→last-write-wins; Tab close→no ghost elements; Network drop→auto-recover; Document edge cases and metrics\n<info added on 2026-01-21T08:31:01.494Z>\n✅ Testing Guide Created:\n\n**Multi-Tab Testing Instructions:**\n\n1. **Basic Real-time Sync Test:**\n   - Open board in two browser windows/tabs (same user or different users)\n   - Draw a shape in Tab 1\n   - Verify shape appears in Tab 2 within 500ms\n   - Draw in Tab 2, verify appears in Tab 1\n   - Expected: Instant sync (<500ms latency)\n\n2. **Simultaneous Edits Test:**\n   - Open same board in 2 tabs\n   - Both users draw different shapes simultaneously\n   - Verify both shapes appear in both tabs\n   - Edit same element in both tabs simultaneously\n   - Expected: Last-write-wins (remote element overwrites local)\n\n3. **Tab Close Test:**\n   - Open board in 2 tabs\n   - Draw in Tab 1\n   - Close Tab 2\n   - Continue drawing in Tab 1\n   - Reopen Tab 2\n   - Expected: Tab 2 loads latest state from database, no ghost elements\n\n4. **Network Disconnect Test:**\n   - Open board in 2 tabs\n   - Disable network in Tab 1 (DevTools → Network → Offline)\n   - Draw in Tab 1 (should queue for later)\n   - Draw in Tab 2 (should appear in Tab 2 only)\n   - Re-enable network in Tab 1\n   - Expected: Tab 1 syncs from database, shows Tab 2's changes, then sends queued changes\n\n5. **Page Refresh Test:**\n   - Open board in 2 tabs\n   - Draw in Tab 1\n   - Refresh Tab 2\n   - Expected: Tab 2 loads latest state from database, shows Tab 1's changes\n\n**Edge Cases to Test:**\n- Large payloads (1000+ elements)\n- Rapid successive changes\n- Multiple simultaneous users (3+ tabs)\n- Browser tab backgrounded/foregrounded\n- Long idle periods then sudden activity\n\n**Verification Checklist:**\n- ✅ Channel subscribes (check console: \"Subscribed to board:...\")\n- ✅ Broadcasts sent (check Network tab → WS messages)\n- ✅ Remote updates received (check console logs)\n- ✅ No infinite loops (check React DevTools Profiler)\n- ✅ No duplicate elements after sync\n- ✅ Conflict resolution works (last-write-wins)\n- ✅ Reconnection syncs correctly\n- ✅ Database state matches after all operations\n\n**Implementation Complete:**\nAll real-time collaboration features implemented and ready for testing. The system includes:\n- Channel setup with proper cleanup\n- Broadcast on changes\n- Conflict resolution (last-write-wins)\n- Reconnection with DB sync\n- Error handling and edge case management\n</info added on 2026-01-21T08:31:01.494Z>",
-            "status": "pending",
+            "details": "Test 2+ tabs same board: draw→instant sync <500ms; Simultaneous edits→last-write-wins; Tab close→no ghost elements; Network drop→auto-recover; Document edge cases and metrics\n<info added on 2026-01-21T08:31:01.494Z>\n✅ Testing Guide Created:\n\n**Multi-Tab Testing Instructions:**\n\n1. **Basic Real-time Sync Test:**\n   - Open board in two browser windows/tabs (same user or different users)\n   - Draw a shape in Tab 1\n   - Verify shape appears in Tab 2 within 500ms\n   - Draw in Tab 2, verify appears in Tab 1\n   - Expected: Instant sync (<500ms latency)\n\n2. **Simultaneous Edits Test:**\n   - Open same board in 2 tabs\n   - Both users draw different shapes simultaneously\n   - Verify both shapes appear in both tabs\n   - Edit same element in both tabs simultaneously\n   - Expected: Last-write-wins (remote element overwrites local)\n\n3. **Tab Close Test:**\n   - Open board in 2 tabs\n   - Draw in Tab 1\n   - Close Tab 2\n   - Continue drawing in Tab 1\n   - Reopen Tab 2\n   - Expected: Tab 2 loads latest state from database, no ghost elements\n\n4. **Network Disconnect Test:**\n   - Open board in 2 tabs\n   - Disable network in Tab 1 (DevTools → Network → Offline)\n   - Draw in Tab 1 (should queue for later)\n   - Draw in Tab 2 (should appear in Tab 2 only)\n   - Re-enable network in Tab 1\n   - Expected: Tab 1 syncs from database, shows Tab 2's changes, then sends queued changes\n\n5. **Page Refresh Test:**\n   - Open board in 2 tabs\n   - Draw in Tab 1\n   - Refresh Tab 2\n   - Expected: Tab 2 loads latest state from database, shows Tab 1's changes\n\n**Edge Cases to Test:**\n- Large payloads (1000+ elements)\n- Rapid successive changes\n- Multiple simultaneous users (3+ tabs)\n- Browser tab backgrounded/foregrounded\n- Long idle periods then sudden activity\n\n**Verification Checklist:**\n- ✅ Channel subscribes (check console: \"Subscribed to board:...\")\n- ✅ Broadcasts sent (check Network tab → WS messages)\n- ✅ Remote updates received (check console logs)\n- ✅ No infinite loops (check React DevTools Profiler)\n- ✅ No duplicate elements after sync\n- ✅ Conflict resolution works (last-write-wins)\n- ✅ Reconnection syncs correctly\n- ✅ Database state matches after all operations\n\n**Implementation Complete:**\nAll real-time collaboration features implemented and ready for testing. The system includes:\n- Channel setup with proper cleanup\n- Broadcast on changes\n- Conflict resolution (last-write-wins)\n- Reconnection with DB sync\n- Error handling and edge case management\n</info added on 2026-01-21T08:31:01.494Z>\n<info added on 2026-01-21T11:51:49.397Z>\n✅ Manual testing completed successfully!\n\n**Testing Results:**\n- Real-time sync working correctly (<500ms latency)\n- Drawing appears in other windows instantly\n- No data loss during simultaneous edits\n- Conflict resolution working (last-write-wins per element)\n- Lines no longer disappear when drawing new ones\n- Tool/color selection stays local (not broadcasted)\n- Zoom/pan/scroll stays local (not broadcasted)\n- \"Unsaved changes\" indicator working correctly\n- Canvas fills entire viewport correctly\n\n**All features verified and working as expected!**\n</info added on 2026-01-21T11:51:49.397Z>",
+            "status": "done",
             "testStrategy": "2 browser windows→draw in one→appears in other <500ms; Simultaneous edits→no data loss; Refresh→syncs correctly; Network disconnect→reconnects and syncs"
           }
         ]
@@ -586,7 +586,7 @@
     ],
     "metadata": {
       "created": "2026-01-20T15:29:39.230Z",
-      "updated": "2026-01-21T08:28:12.839Z",
+      "updated": "2026-01-21T11:51:43.042Z",
       "description": "Tasks for master context"
     }
   }
