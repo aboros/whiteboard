@@ -1,0 +1,58 @@
+# Task ID: 5
+# Title: Board Management CRUD
+# Status: done
+# Dependencies: 1, 2, 3, 4
+# Priority: high
+# Description: Implement server actions and dashboard for board listing/creation/deletion/slug generation
+# Details:
+lib/actions/boards.ts: getBoards(), getBoard(slug), createBoard(name) with slugify(name + '-' + Date.now()), updateBoard(), deleteBoard(); lib/utils/slug.ts: implement slugify with unicode handling and duplicate suffix; app/page.tsx: dashboard with BoardList; components/boards/BoardCard.tsx, CreateBoardDialog.tsx with validation (1-100 chars); Navigation to /board/[slug]
+
+# Test Strategy:
+Create board→verify list updates→delete→confirm removed; Test duplicate names get unique slugs; Test validation prevents empty names; 404 on invalid slug redirects to dashboard
+
+# Subtasks:
+## 1. Implement Server Actions for Board CRUD [done]
+### Dependencies: None
+### Description: Create all server actions in lib/actions/boards.ts: getBoards(), getBoard(slug), createBoard(name), updateBoard(), deleteBoard() using Supabase server client.
+### Details:
+Use createServerClient from @supabase/ssr; Implement getBoards() to fetch user boards with RLS; createBoard generates slug via slugify(name + '-' + Date.now()); Handle errors and revalidatePath; Ensure actions are 'use server' directives.
+
+## 2. Implement Slugify Utility with Unicode and Duplicates [done]
+### Dependencies: 5.1
+### Description: Create lib/utils/slug.ts with slugify function handling unicode characters and automatic duplicate suffix generation.
+### Details:
+Use slugify library or custom regex for unicode; For duplicates, check existing slugs in DB and append -2, -3 etc.; Export slugify function; Integrate into createBoard/updateBoard actions.
+
+## 3. Build Dashboard UI with BoardList and Dialogs [done]
+### Dependencies: 5.1
+### Description: Implement app/page.tsx dashboard with BoardList using BoardCard; Add CreateBoardDialog with name validation (1-100 chars).
+### Details:
+Create components/boards/BoardCard.tsx for board display; CreateBoardDialog.tsx with form validation, call createBoard action; Use Shadcn components; Fetch boards via getBoards in page; Handle loading/error states.
+<info added on 2026-01-20T15:39:46.174Z>
+Implement whitespace validation for board names in both client and server components. In CreateBoardDialog.tsx, add client-side validation that trims the input value and checks if the result is empty, displaying an appropriate error message if validation fails. In the createBoard server action, add server-side validation that trims the name parameter and rejects the request with an error message if the trimmed result is empty. This ensures board names cannot consist solely of whitespace characters and provides consistent validation across both client and server.
+</info added on 2026-01-20T15:39:46.174Z>
+
+## 4. Implement Board Navigation and 404 Handling [done]
+### Dependencies: 5.1, 5.3
+### Description: Set up navigation from dashboard to /board/[slug]; Handle invalid slugs with 404 redirecting to dashboard.
+### Details:
+Use Link in BoardCard to /board/[slug]; Create app/board/[slug]/page.tsx fetching getBoard(slug); If not found, notFound() or redirect to dashboard; Ensure middleware auth protection.
+
+## 5. Implement Board Deletion with Confirmation [done]
+### Dependencies: 5.1, 5.3
+### Description: Add delete board functionality with confirmation dialog (F2.5) and handle concurrent deletion errors (F2.14)
+### Details:
+Add delete button to BoardCard, implement DeleteBoardDialog with confirmation, handle concurrent deletion scenarios where board no longer exists, update dashboard after deletion
+
+## 6. Implement Comprehensive Error Handling for Board Operations [done]
+### Dependencies: 5.1, 5.2, 5.3
+### Description: Add error handling for network errors (F2.11), validation errors (F2.12), database constraint violations (F2.15), and concurrent operations
+### Details:
+Implement error handling in server actions and UI: network errors during board creation show error with retry, invalid board name shows validation error before submission, database constraint violations show user-friendly error, handle concurrent operations gracefully
+
+## 7. Implement Empty State UI [done]
+### Dependencies: 5.3
+### Description: Add empty state display when no boards exist (F2 acceptance criteria) with call-to-action to create first board
+### Details:
+Create EmptyState component showing message when board list is empty, include visual indicator and button to create first board, integrate into dashboard BoardList component
+

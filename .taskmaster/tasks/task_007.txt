@@ -1,0 +1,37 @@
+# Task ID: 7
+# Title: Auto-Save Functionality
+# Status: done
+# Dependencies: 1, 3, 5, 6
+# Priority: high
+# Description: Debounced auto-save of elements and appState to database
+# Details:
+In ExcalidrawWrapper: useDebounceCallback(saveToDb, 5000); const onChange=(elements, appState)=>{saveToDb(elements, appState);}; async saveToDb=async(elements, appState)=>{await updateBoard(slug, {elements, app_state:appState})}; Track dirty state for save indicator; Implement retry queue (3 attempts) with exponential backoff; Network reconnect handling
+
+# Test Strategy:
+Draw→wait 5s→check network tab for save; Refresh→verify drawing persists; Test rapid changes don't spam API; Simulate network failure→verify retry then notification
+
+# Subtasks:
+## 1. Implement Debounced onChange Handler with Dirty State [done]
+### Dependencies: None
+### Description: Create debounced save callback (5000ms) in ExcalidrawWrapper, integrate with Excalidraw onChange, add dirty state tracking with save indicator UI
+### Details:
+Use useDebounceCallback or useMemo(debounce(saveToDb, 5000)); Track isDirty state on any change, clear on successful save; Add visual indicator (spinner/dot) in UI; Ensure immediate state updates for responsiveness while debouncing save[1][2][3]
+
+## 2. Integrate saveToDb with Server Action [done]
+### Dependencies: 7.1
+### Description: Implement async saveToDb function calling updateBoard server action with elements and appState serialization
+### Details:
+Define async saveToDb(elements, appState) → await updateBoard(slug, {elements, app_state: appState}); Handle success by clearing dirty state; Add basic error logging; Ensure proper JSON serialization for Excalidraw data structures
+
+## 3. Add Retry Queue with Exponential Backoff [done]
+### Dependencies: 7.2
+### Description: Implement retry mechanism (3 attempts) for failed saves with exponential backoff (1s, 2s, 4s) and queue management
+### Details:
+Create retry queue array; On save failure, push to queue with attempt count; Use setTimeout with backoff (1000 * 2^(attempt-1)); Max 3 retries then show permanent error; Process queue FIFO; Persist queue to localStorage for page refresh
+
+## 4. Network Reconnect and UI Feedback [done]
+### Dependencies: 7.3
+### Description: Handle network reconnect detection, queue processing on online, comprehensive error notifications and status display
+### Details:
+Use navigator.onLine and window 'online'/'offline' events; Process retry queue on reconnect; Add toast notifications for save success/failure/permanent error; Show 'Offline - will sync when back online' message; Clear queue after 3 failed retries
+

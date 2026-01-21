@@ -1,0 +1,25 @@
+# Task ID: 9
+# Title: Presence Indicators
+# Status: done
+# Dependencies: 1, 3, 4, 8
+# Priority: medium
+# Description: Real-time user presence avatars on board page
+# Details:
+Extend realtime channel: channel.on('presence', {event:'sync'}, ()=>setOnlineUsers(Object.values(channel.presenceState()).flat())); On subscribe: channel.track({user_id:user.id, email:user.email, online_at:new Date().toISOString()}); components/canvas/PresenceAvatars.tsx: display emails in corner; Handle multiple tabs as single user
+
+# Test Strategy:
+Open board→shows self; 2nd user joins→both visible; Close tab→removes instantly; Network drop→presence updates correctly
+
+# Subtasks:
+## 1. Extend Realtime Channel with Presence Tracking [done]
+### Dependencies: None
+### Description: Implement Supabase presence tracking on the existing realtime channel for board pages including sync event handling and user tracking on subscribe
+### Details:
+Add channel.on('presence', {event:'sync'}, ()=>setOnlineUsers(Object.values(channel.presenceState()).flat())) to handle presence state sync. On channel.subscribe(), call channel.track({user_id:user.id, email:user.email, online_at:new Date().toISOString()}) to register user presence. Ensure integration with existing board channel `board:${slug}` from Task 8.
+
+## 2. Implement PresenceAvatars Component with Multi-tab Deduplication [done]
+### Dependencies: 9.1
+### Description: Create components/canvas/PresenceAvatars.tsx to display user avatars/emails in board corner with logic to handle multiple tabs as single user
+### Details:
+Display emails or avatars from onlineUsers state in UI corner. Implement deduplication by user_id (filter Object.values(channel.presenceState()) to unique user_ids). Use PresenceAvatars.tsx with props for onlineUsers array. Style as small corner overlay with Tailwind.
+

@@ -1,0 +1,11 @@
+# Task ID: 11
+# Title: Board Ownership and Sharing
+# Status: pending
+# Dependencies: 5
+# Priority: high
+# Description: Implement board ownership and sharing functionality with access control and user management
+# Details:
+The user who creates a board becomes the owner. Boards are private by default and only visible to the owner. Owners can share boards with other users by email address, with a warning displayed if the email is not found in the system. Shared boards grant editing access to the recipient. Owners can revoke access later. The Boards page should display a 'Shared with me' section showing boards shared with the current user. Board cards in the 'My boards' section should indicate if a board is shared and show the number of users it's shared with.
+
+# Test Strategy:
+Create board as user A → verify only user A sees it; Share board with user B by email → verify user B sees it in 'Shared with me' section; Verify user B can edit the board; Test sharing with non-existent email shows warning; Revoke access → verify user B no longer sees board; Verify board card shows sharing indicator and count

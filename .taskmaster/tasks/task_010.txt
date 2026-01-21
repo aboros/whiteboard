@@ -1,0 +1,64 @@
+# Task ID: 10
+# Title: Deployment Configuration
+# Status: pending
+# Dependencies: 1, 2, 3, 4, 5
+# Priority: medium
+# Description: Vercel deployment, health checks, and production optimizations
+# Details:
+Implement health check endpoint at app/api/health/route.ts: GET returns {status:'ok', timestamp:new Date().toISOString()}; Create vercel.json with security headers and edge settings; Configure Next.js production optimizations in next.config.js; Set up Vercel Analytics for monitoring; Update README.md and create DEPLOYMENT.md with complete setup instructions, env vars, Supabase migration steps, and production best practices
+
+# Test Strategy:
+Deploy to Vercel preview environment; curl deployed-url/api/health; Test full flow in production environment; Verify health endpoint for monitoring; Run Lighthouse audit to confirm optimizations
+
+# Subtasks:
+## 1. Health check API route implementation [pending]
+### Dependencies: None
+### Description: Implement GET /api/health endpoint in app/api/health/route.ts returning JSON {status:'ok', timestamp: new Date().toISOString()} for Vercel monitoring and uptime checks
+### Details:
+Create Next.js API route handler exporting async GET function; return Response.json({status:'ok', timestamp: new Date().toISOString()}, {status:200}); Ensure lightweight, no database calls for fast monitoring and uptime checks
+
+## 2. Vercel configuration setup [pending]
+### Dependencies: None
+### Description: Create vercel.json configuration file with security headers, edge settings, and Next.js optimizations
+### Details:
+Create vercel.json with: headers configuration for Content-Security-Policy, X-Content-Type-Options, X-Frame-Options, etc.; Configure edge settings for optimal performance; Set up redirects and rewrites if needed; Add build settings specific to Next.js application
+
+## 3. Next.js production optimizations [pending]
+### Dependencies: None
+### Description: Configure next.config.js with production optimizations for image handling, output settings, and performance
+### Details:
+Update next.config.js with: optimized image configuration (formats, domains, sizes); output: 'standalone' for improved build artifacts; Configure appropriate cache settings; Enable appropriate compiler options; Add any necessary experimental features for performance; Configure appropriate runtime settings
+
+## 4. Production monitoring setup [pending]
+### Dependencies: 10.1, 10.2, 10.3
+### Description: Configure Vercel Analytics and error tracking for production monitoring
+### Details:
+Enable Vercel Analytics in project settings; Add @vercel/analytics package and integrate into application; Configure error boundaries and reporting; Set up alerts for critical issues; Document monitoring dashboard access and interpretation
+
+## 5. README updates for deployment instructions [pending]
+### Dependencies: 10.1, 10.2, 10.3, 10.4
+### Description: Update README.md with complete Vercel setup, env vars, build/run commands, Supabase migration steps, and production configuration
+### Details:
+Add sections: Prerequisites (Vercel account, Supabase CLI), Environment Variables (NEXT_PUBLIC_SUPABASE_URL, ANON_KEY), Local Development (npm run dev), Production Deployment (Vercel GitHub integration or CLI deployment), Supabase Setup (supabase migration up, enable realtime); Include health check verification and common issues
+<info added on 2026-01-20T16:34:09.714Z>
+## Authentication Setup
+
+### Magic Link Authentication
+1. Enable Magic Link authentication in Supabase Dashboard (Authentication → Providers → Email → Enable Magic Link)
+2. Configure redirect URL for magic links: 
+   - Development: http://localhost:3000/auth/callback
+   - Production: https://your-domain.com/auth/callback
+3. Add users manually via Supabase UI (Authentication → Users → Add user) - email only, no password required
+
+### Important Notes
+- Authentication is passwordless (magic link only)
+- Users are managed manually via Supabase UI
+- No password authentication or signup functionality is implemented
+</info added on 2026-01-20T16:34:09.714Z>
+
+## 6. Create DEPLOYMENT.md with production best practices [pending]
+### Dependencies: 10.1, 10.2, 10.3, 10.4, 10.5
+### Description: Create a dedicated DEPLOYMENT.md file with comprehensive production deployment guidelines and best practices
+### Details:
+Create DEPLOYMENT.md with sections: Vercel deployment workflow, CI/CD setup, environment configuration, domain setup and SSL, monitoring and alerting, performance optimization tips, scaling considerations, rollback procedures, and maintenance guidelines; Include troubleshooting section for common deployment issues
+

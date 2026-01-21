@@ -18,7 +18,7 @@ export default async function DashboardPage() {
     )
   }
 
-  const boards = result.data || []
+  const { owned = [], shared = [] } = result.data || { owned: [], shared: [] }
 
-  return <DashboardClient initialBoards={boards} />
+  return <DashboardClient initialOwnedBoards={owned} initialSharedBoards={shared} />
 }

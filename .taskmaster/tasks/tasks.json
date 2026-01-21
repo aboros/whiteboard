@@ -619,11 +619,97 @@
             "testStrategy": "Review document for completeness; Verify all steps can be followed without prior knowledge; Test any scripts or commands included in the documentation"
           }
         ]
+      },
+      {
+        "id": 11,
+        "title": "Board Ownership and Sharing",
+        "description": "Implement board ownership and sharing functionality with access control and user management",
+        "details": "The user who creates a board becomes the owner. Boards are private by default and only visible to the owner. Owners can share boards with other users by email address, with a warning displayed if the email is not found in the system. Shared boards grant editing access to the recipient. Owners can revoke access later. The Boards page should display a 'Shared with me' section showing boards shared with the current user. Board cards in the 'My boards' section should indicate if a board is shared and show the number of users it's shared with.",
+        "testStrategy": "Create board as user A → verify only user A sees it; Share board with user B by email → verify user B sees it in 'Shared with me' section; Verify user B can edit the board; Test sharing with non-existent email shows warning; Revoke access → verify user B no longer sees board; Verify board card shows sharing indicator and count",
+        "priority": "high",
+        "dependencies": [
+          5
+        ],
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Create board_shares table and RLS policies",
+            "description": "Create a board_shares table to track board sharing relationships with proper RLS policies",
+            "details": "Create board_shares table with columns: id (uuid), board_id (uuid, foreign key to boards), shared_with_user_id (uuid, foreign key to auth.users), shared_by_user_id (uuid, foreign key to auth.users), created_at (timestamptz). Add indexes on board_id and shared_with_user_id. Create RLS policies: users can view shares for boards they own or are shared with, owners can insert/delete shares, shared users can view their shares.",
+            "status": "done",
+            "dependencies": [],
+            "parentTaskId": 11
+          },
+          {
+            "id": 2,
+            "title": "Update boards RLS policies to support sharing",
+            "description": "Modify existing RLS policies on boards table to allow shared users to read and update boards",
+            "details": "Update SELECT policy to allow users to see boards they created OR boards shared with them (via board_shares join). Update UPDATE policy to allow users to update boards they created OR boards shared with them. Keep DELETE policy restricted to owners only.",
+            "status": "done",
+            "dependencies": [],
+            "parentTaskId": 11
+          },
+          {
+            "id": 3,
+            "title": "Create server actions for sharing and revoking access",
+            "description": "Implement shareBoard and revokeBoardAccess server actions in lib/actions/boards.ts",
+            "details": "shareBoard(boardId, email): Look up user by email in auth.users, if not found return warning, if found create board_shares record. revokeBoardAccess(boardId, userId): Remove board_shares record. Both actions should verify the current user is the board owner. Include proper error handling and revalidation.",
+            "status": "done",
+            "dependencies": [],
+            "parentTaskId": 11
+          },
+          {
+            "id": 4,
+            "title": "Update getBoards to separate owned and shared boards",
+            "description": "Modify getBoards to return separate lists for owned boards and shared boards",
+            "details": "Update getBoards() to return { owned: Board[], shared: Board[] } instead of single array. Query boards where created_by = current_user for owned. Query boards via board_shares join where shared_with_user_id = current_user for shared. Maintain ordering by updated_at descending.",
+            "status": "done",
+            "dependencies": [],
+            "parentTaskId": 11
+          },
+          {
+            "id": 5,
+            "title": "Create ShareBoardDialog component",
+            "description": "Build a dialog component for sharing boards with email input and user list",
+            "details": "Create ShareBoardDialog component with: email input field, list of currently shared users with revoke buttons, share button that calls shareBoard action, warning message if email not found, loading states. Use existing dialog patterns from CreateBoardDialog.",
+            "status": "done",
+            "dependencies": [],
+            "parentTaskId": 11
+          },
+          {
+            "id": 6,
+            "title": "Update dashboard to show \"Shared with me\" section",
+            "description": "Modify app/page.tsx and BoardList to display separate sections for owned and shared boards",
+            "details": "Update dashboard page to handle { owned, shared } structure from getBoards. Add \"My Boards\" section for owned boards and \"Shared with me\" section for shared boards. Update BoardList component to accept separate props or handle both arrays. Show empty states appropriately.",
+            "status": "done",
+            "dependencies": [],
+            "parentTaskId": 11
+          },
+          {
+            "id": 7,
+            "title": "Add sharing indicators to BoardCard",
+            "description": "Display sharing status and count on board cards in \"My Boards\" section",
+            "details": "Update BoardCard to show sharing indicator (icon/badge) if board is shared. Display count of users the board is shared with. Add share button/icon that opens ShareBoardDialog. Only show sharing controls for boards owned by current user. Query board_shares count for each board.",
+            "status": "done",
+            "dependencies": [],
+            "parentTaskId": 11
+          },
+          {
+            "id": 8,
+            "title": "Update getBoard to check sharing access",
+            "description": "Ensure getBoard respects sharing permissions when fetching a single board",
+            "details": "Update getBoard(slug) to verify user has access (owner or shared) before returning board data. Return appropriate error if user doesn't have access. This ensures shared users can access boards via URL.",
+            "status": "done",
+            "dependencies": [],
+            "parentTaskId": 11
+          }
+        ]
       }
     ],
     "metadata": {
       "created": "2026-01-20T15:29:39.230Z",
-      "updated": "2026-01-21T11:54:13.875Z",
+      "updated": "2026-01-21T21:19:17.768Z",
       "description": "Tasks for master context"
     }
   }

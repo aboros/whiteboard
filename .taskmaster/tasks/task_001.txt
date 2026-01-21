@@ -1,0 +1,58 @@
+# Task ID: 1
+# Title: Project Setup and Dependencies
+# Status: done
+# Dependencies: None
+# Priority: high
+# Description: Initialize Next.js 14+ project with TypeScript, Tailwind CSS, and all required dependencies per tech stack
+# Details:
+npx create-next-app@14.2.15 whiteboard-app --typescript --tailwind --eslint --app; cd whiteboard-app; Install: npm i @excalidraw/excalidraw@0.18.0 @supabase/supabase-js@2.45.4 @supabase/ssr@0.5.1 use-debounce@10.0.1 lucide-react@0.441.0; npm i -D @types/node typescript; Create project structure matching PRD; Configure tailwind.config.js with dark mode; Add .env.local with NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY placeholders
+
+# Test Strategy:
+Verify Next.js starts without errors: npm run dev; Check Tailwind classes apply correctly; Confirm all dependencies resolve without version conflicts; Test build: npm run build
+
+# Subtasks:
+## 1. Initialize Next.js Project [done]
+### Dependencies: None
+### Description: Run npx create-next-app@14.2.15 to set up whiteboard-app with TypeScript, Tailwind CSS, ESLint, and App Router.
+### Details:
+Execute: npx create-next-app@14.2.15 whiteboard-app --typescript --tailwind --eslint --app; cd whiteboard-app; Verify project starts with npm run dev and no errors.
+
+## 2. Install and Verify Dependencies [done]
+### Dependencies: 1.1
+### Description: Install all required runtime and dev dependencies including Excalidraw, Supabase, and TypeScript types.
+### Details:
+Run: npm i @excalidraw/excalidraw@0.18.0 @supabase/supabase-js@2.45.4 @supabase/ssr@0.5.1 use-debounce@10.0.1 lucide-react@0.441.0; npm i -D @types/node typescript; Check package.json and node_modules.
+<info added on 2026-01-20T15:53:57.026Z>
+**Security Fix Applied (2025-01-XX)**
+
+Upgraded Next.js from 14.2.15 to 14.2.35 to fix critical security vulnerabilities:
+- CVE-2025-55184: Denial-of-service vulnerability in React Server Components
+- CVE-2025-55183: Source code exposure vulnerability in React Server Components
+
+**Changes:**
+- Updated `next` package from 14.2.15 → 14.2.35
+- Updated `eslint-config-next` from 14.2.15 → 14.2.35 (to match Next.js version)
+- Verified all dependencies install correctly
+- Confirmed build succeeds without errors
+- Tested dev server starts successfully
+- Verified no Next.js security vulnerabilities remain
+
+**Verification:**
+- ✅ `npm ls next` confirms 14.2.35 installed
+- ✅ `npm audit` shows no Next.js vulnerabilities
+- ✅ `npm run build` succeeds
+- ✅ `npm run dev` starts without errors
+- ✅ No deprecation warnings for Next.js in npm install output
+
+The security vulnerability has been completely resolved. All functionality remains intact.
+</info added on 2026-01-20T15:53:57.026Z>
+
+## 3. Configure Project Structure and Environment [done]
+### Dependencies: 1.1
+### Description: Set up Tailwind dark mode, create PRD-matching folder structure, and add .env.local with Supabase placeholders.
+### Details:
+Update tailwind.config.js: module.exports = {darkMode: 'class', ...}; mkdir components lib app/board app/login app/signup; touch .env.local with NEXT_PUBLIC_SUPABASE_URL= and NEXT_PUBLIC_SUPABASE_ANON_KEY= placeholders.
+<info added on 2026-01-20T16:33:47.774Z>
+Update tailwind.config.js: module.exports = {darkMode: 'class', ...}; mkdir components lib app/board app/login app/auth/callback; touch .env.local with NEXT_PUBLIC_SUPABASE_URL= and NEXT_PUBLIC_SUPABASE_ANON_KEY= placeholders.
+</info added on 2026-01-20T16:33:47.774Z>
+

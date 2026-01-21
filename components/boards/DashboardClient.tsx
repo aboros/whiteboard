@@ -5,12 +5,17 @@ import { useRouter } from 'next/navigation'
 import { Board } from '@/lib/actions/boards'
 import { BoardList } from './BoardList'
 import { CreateBoardButton } from './CreateBoardButton'
+import { EmptyState } from './EmptyState'
 
 interface DashboardClientProps {
-  initialBoards: Board[]
+  initialOwnedBoards: Board[]
+  initialSharedBoards: Board[]
 }
 
-export function DashboardClient({ initialBoards }: DashboardClientProps) {
+export function DashboardClient({
+  initialOwnedBoards,
+  initialSharedBoards,
+}: DashboardClientProps) {
   const router = useRouter()
 
   const handleRefresh = () => {
@@ -26,20 +31,52 @@ export function DashboardClient({ initialBoards }: DashboardClientProps) {
               My Boards
             </h1>
             <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-              {initialBoards.length}{' '}
-              {initialBoards.length === 1 ? 'board' : 'boards'}
+              {initialOwnedBoards.length}{' '}
+              {initialOwnedBoards.length === 1 ? 'board' : 'boards'}
             </p>
           </div>
           <CreateBoardButton />
         </div>
 
-        <BoardList
-          boards={initialBoards}
-          onCreateClick={() => {
-            // Handled by CreateBoardButton
-          }}
-          onDelete={handleRefresh}
-        />
+        {initialOwnedBoards.length === 0 ? (
+          <EmptyState
+            onCreateClick={() => {
+              // Handled by CreateBoardButton
+            }}
+          />
+        ) : (
+          <BoardList
+            boards={initialOwnedBoards}
+            onCreateClick={() => {
+              // Handled by CreateBoardButton
+            }}
+            onDelete={handleRefresh}
+            isOwner={true}
+          />
+        )}
+
+        {initialSharedBoards.length > 0 && (
+          <div className="mt-12">
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                Shared with me
+              </h2>
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                {initialSharedBoards.length}{' '}
+                {initialSharedBoards.length === 1 ? 'board' : 'boards'} shared
+                with you
+              </p>
+            </div>
+            <BoardList
+              boards={initialSharedBoards}
+              onCreateClick={() => {
+                // Handled by CreateBoardButton
+              }}
+              onDelete={handleRefresh}
+              isOwner={false}
+            />
+          </div>
+        )}
       </div>
     </main>
   )

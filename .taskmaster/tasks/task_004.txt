@@ -1,0 +1,121 @@
+# Task ID: 4
+# Title: Authentication System
+# Status: done
+# Dependencies: 1, 2, 3
+# Priority: high
+# Description: Implement magic link login/logout flow and middleware protection for routes
+# Details:
+Create components/auth/AuthForm.tsx with email validation (RFC5322); app/login/page.tsx using server actions for magic link auth; Implement middleware.ts protecting all routes except /login and magic link callback; Add logout button to layout; Use supabase.auth.signInWithOtp/getSession; Persist session with cookies via @supabase/ssr; Show 'Check your email' message after submission
+
+# Test Strategy:
+E2E: email submission→check email message→click magic link→login→access protected routes→logout→blocked from protected routes; Test validation errors inline; Verify session persists on refresh; Test invalid/expired token errors
+
+# Subtasks:
+## 1. Create AuthForm Component with Email Validation [done]
+### Dependencies: None
+### Description: Develop reusable AuthForm.tsx component with email (RFC5322) validation for magic link login form.
+### Details:
+Implement form with react-hook-form or similar; email regex per RFC5322; display inline validation errors; email-only input field; Tailwind styled; include submit button for requesting magic link.
+<info added on 2026-01-20T16:41:25.102Z>
+✅ Completed implementation:
+
+**Created components/auth/AuthForm.tsx:**
+- Email input with RFC 5322 compliant validation
+- Inline validation error display
+- Success message after magic link request ("Check your email")
+- Loading states during submission
+- Accessible form with proper ARIA labels
+- Client-side validation before submission
+
+**Key features:**
+- Validates email format using RFC 5322 regex
+- Shows inline errors immediately
+- Clears email on successful submission
+- Disabled state during submission
+- Responsive design with dark mode support
+</info added on 2026-01-20T16:41:25.102Z>
+
+## 2. Implement Login Page with Magic Link Server Actions [done]
+### Dependencies: 4.1
+### Description: Create app/login/page.tsx using AuthForm and Supabase server actions for signInWithOtp.
+### Details:
+Use @supabase/ssr createServerClient in server actions; handle errors (invalid email format); show 'Check your email' message after successful submission; add loading states during submission.
+
+## 3. Implement Magic Link Callback Handler [done]
+### Dependencies: 4.2
+### Description: Create route handler for magic link callback URL that Supabase redirects to with token.
+### Details:
+Implement app/auth/callback/route.ts to handle the OTP token from URL; verify token validity; establish session; redirect to dashboard on success; handle invalid/expired token errors.
+<info added on 2026-01-20T16:41:30.087Z>
+✅ Completed implementation:
+
+**Created app/auth/callback/route.ts:**
+- Handles OTP token verification from magic link
+- Validates token_hash and type query parameters
+- Redirects to dashboard on success
+- Redirects to login with error messages on failure
+- Handles expired tokens, invalid tokens, and server errors
+
+**Error handling:**
+- Expired tokens → "expired" error
+- Invalid tokens → "invalid_token" error
+- Missing parameters → "invalid_request" error
+- Server errors → "server_error" error
+
+**Key features:**
+- Preserves intended destination via `next` query param
+- Proper error logging for debugging
+- User-friendly error redirects to login page
+</info added on 2026-01-20T16:41:30.087Z>
+
+## 4. Implement Middleware for Route Protection [done]
+### Dependencies: 4.2, 4.3
+### Description: Create middleware.ts to protect all routes except /login and magic link callback route using Supabase middleware client.
+### Details:
+Use lib/supabase/middleware.ts createMiddlewareClient; check session; redirect unauthenticated to /login; allow public routes: /login, /, /auth/callback; protect /dashboard and /board/*.
+
+## 5. Add Session Management and Logout Functionality [done]
+### Dependencies: 4.3, 4.4
+### Description: Integrate session persistence with cookies and add logout button to root layout with supabase.auth.signOut.
+### Details:
+Use @supabase/ssr for cookie-based session persistence; getSession in layout/server components; conditional render logout button when session exists; handle signOut with redirect to /login.
+
+## 6. Implement E2E Testing for Magic Link Auth Flows [done]
+### Dependencies: 4.1, 4.2, 4.3, 4.4, 4.5
+### Description: Create comprehensive E2E tests covering email submission→check email message→magic link→login→protected access→logout→blocked access flows.
+### Details:
+Use Playwright/Cypress; test full user journey per test strategy; validate inline errors for email; test session persistence; cover edge cases like invalid/expired tokens and protected route blocks.
+
+## 7. Implement Comprehensive Error Handling [done]
+### Dependencies: 4.2, 4.3, 4.4, 4.5
+### Description: Add error handling for network errors, email validation errors, magic link sending errors, and invalid/expired token errors with user-friendly messages and retry options
+### Details:
+Implement error handling in AuthForm and server actions: network errors show retry option, email validation errors show inline, magic link sending errors display user-friendly message, invalid/expired tokens redirect to login with appropriate message, server errors (500) show generic message with server-side logging
+<info added on 2026-01-20T16:41:37.910Z>
+✅ Error handling integrated throughout:
+
+**Client-side error handling:**
+- Email validation errors shown inline before submission
+- Network errors show user-friendly messages with retry option
+- Magic link sending failures show clear error messages
+- Loading states prevent duplicate submissions
+
+**Server-side error handling:**
+- Email validation on both client and server
+- Magic link sending errors logged server-side, user-friendly messages shown
+- Invalid/expired token errors redirect to login with appropriate messages
+- Server errors (500) show generic message, details logged server-side
+- Session expiration handled via middleware redirect
+
+**Error messages:**
+- Expired tokens: "The magic link has expired. Please request a new one."
+- Invalid tokens: "Invalid or expired magic link. Please request a new one."
+- Network errors: "Failed to send magic link. Please check your email and try again."
+- Server errors: "An unexpected error occurred. Please try again."
+
+**LoginError component:**
+- Created components/auth/LoginError.tsx for consistent error display
+- Maps error codes to user-friendly messages
+- Accessible error alerts with proper ARIA roles
+</info added on 2026-01-20T16:41:37.910Z>
+

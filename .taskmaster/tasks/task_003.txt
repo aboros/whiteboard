@@ -1,0 +1,48 @@
+# Task ID: 3
+# Title: Supabase Client Setup
+# Status: done
+# Dependencies: 1
+# Priority: high
+# Description: Create browser and server Supabase clients with proper SSR handling
+# Details:
+lib/supabase/client.ts: export createClient() using createBrowserClient from @supabase/ssr@0.5.1; lib/supabase/server.ts: export createServerClient() using createServerClient; lib/supabase/middleware.ts: createMiddlewareClient(); Update root layout.tsx to wrap with SupabaseProvider; Use process.env.NEXT_PUBLIC_SUPABASE_URL/ANON_KEY
+
+# Test Strategy:
+Test client initialization in browser console; Verify server actions can query boards table; Check no hydration errors on SSR pages
+
+# Subtasks:
+## 1. Create browser and server client files [done]
+### Dependencies: None
+### Description: Create lib/supabase/client.ts using createBrowserClient and lib/supabase/server.ts using createServerClient from @supabase/ssr@0.5.1 with env vars
+### Details:
+Implement createClient() in client.ts for browser with NEXT_PUBLIC_SUPABASE_URL/ANON_KEY; createServerClient() in server.ts for SSR with cookie handling per Supabase SSR docs[5][6]
+<info added on 2026-01-20T16:15:02.620Z>
+✅ Completed implementation:
+- Created lib/supabase/client.ts with createBrowserClient from @supabase/ssr
+- Created lib/supabase/server.ts with createServerClient from @supabase/ssr
+- Added environment variable validation for both files
+- Files compile without TypeScript errors
+- Following Supabase SSR documentation patterns for Next.js App Router
+</info added on 2026-01-20T16:15:02.620Z>
+
+## 2. Implement Supabase middleware client [done]
+### Dependencies: 3.1
+### Description: Create lib/supabase/middleware.ts with createMiddlewareClient() for auth session handling in Next.js middleware
+### Details:
+Use createMiddlewareClient from @supabase/ssr with NextRequest/NextResponse; Follow pattern from Supabase docs for proxy/updateSession in middleware.ts[6]
+
+## 3. Integrate SupabaseProvider in root layout [done]
+### Dependencies: 3.1, 3.2
+### Description: Update app/layout.tsx to wrap children with SupabaseProvider; Test SSR handling and hydration
+### Details:
+Import and wrap with SupabaseProvider from @supabase/ssr; Pass createClientComponentClient; Ensure no hydration mismatches; Test server actions query boards[3][5]
+<info added on 2026-01-20T16:15:07.390Z>
+Completed implementation:
+- Created components/providers/SupabaseProvider.tsx client component
+- Provides Supabase client via React Context
+- Includes useSupabase hook for easy access in client components
+- Updated app/layout.tsx to wrap children with SupabaseProvider
+- No hydration errors expected (provider is client component, layout is server component)
+- Environment variable validation ensures clear errors if env vars are missing
+</info added on 2026-01-20T16:15:07.390Z>
+
