@@ -13,7 +13,7 @@ alwaysApply: true
 - **Backend**: Supabase (Auth, PostgreSQL, Realtime)
 - **Styling**: Tailwind CSS with dark mode support
 - **State Management**: React hooks + Supabase Realtime
-- **Deployment**: Docker with multi-stage builds
+- **Deployment**: Vercel (with production build testing)
 
 ### Security & Dependency Management
 
@@ -409,12 +409,13 @@ export function useRealtimeBoard(boardSlug: string) {
 - Pass initial data from Server Component
 - Handle onChange to broadcast updates
 - Debounce saves to avoid excessive API calls
+- **CRITICAL**: Never update state in `onChange` - use refs to prevent infinite loops
 
 ```typescript
-// ✅ DO: Excalidraw wrapper with auto-save
+// ✅ DO: Excalidraw wrapper with auto-save (prevents infinite loops)
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { useDebouncedCallback } from 'use-debounce'
 import { updateBoard } from '@/lib/actions/boards'
@@ -423,6 +424,9 @@ const Excalidraw = dynamic(
   () => import('@excalidraw/excalidraw').then(mod => mod.Excalidraw),
   { ssr: false }
 )
+
+// Type for Excalidraw API - use any since types aren't exported correctly
+type ExcalidrawAPI = any
 
 interface ExcalidrawWrapperProps {
   initialElements: any[]
@@ -435,43 +439,97 @@ export function ExcalidrawWrapper({
   initialAppState, 
   boardSlug 
 }: ExcalidrawWrapperProps) {
-  const excalidrawRef = useRef<any>(null)
-  const [elements, setElements] = useState(initialElements)
-  const [appState, setAppState] = useState(initialAppState)
+  // Use excalidrawAPI prop callback (Excalidraw doesn't support refs directly)
+  const excalidrawRef = useRef<ExcalidrawAPI | null>(null)
+  
+  // Track initial data in ref (set once, never update)
+  const initialDataRef = useRef<{ elements: any[]; appState: any } | null>(null)
+  
+  // Use refs to track current values without causing re-renders
+  const currentElementsRef = useRef<any[]>([])
+  const currentAppStateRef = useRef<any>({})
+  
+  // State only for UI indicators (save status, etc.)
+  const [isDirty, setIsDirty] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  
+  // Initialize initialData once on mount
+  useEffect(() => {
+    if (!initialDataRef.current) {
+      initialDataRef.current = {
+        elements: initialElements || [],
+        appState: initialAppState || {},
+      }
+      currentElementsRef.current = initialElements || []
+      currentAppStateRef.current = initialAppState || {}
+    }
+  }, []) // Empty deps - only run once
   
   // Debounced save (5 seconds)
   const saveToDb = useDebouncedCallback(async (elements: any[], appState: any) => {
+    setIsSaving(true)
     const { error } = await updateBoard(boardSlug, { elements, app_state: appState })
+    setIsSaving(false)
+    
     if (error) {
       console.error('Save failed:', error)
       // Show user notification
+    } else {
+      setIsDirty(false)
     }
   }, 5000)
   
-  const handleChange = (elements: any[], appState: any) => {
-    setElements(elements)
-    setAppState(appState)
-    
-    // Save to database
-    saveToDb(elements, appState)
-    
-    // Broadcast to other users (if using realtime)
-    broadcastUpdate(elements, appState)
-  }
+  // CRITICAL: Don't update state in handleChange - causes infinite loops
+  const handleChange = useCallback(
+    (elements: readonly any[], appState: any, files?: any) => {
+      // Convert readonly array to mutable
+      const mutableElements = [...elements]
+      
+      // Update refs (no re-render)
+      currentElementsRef.current = mutableElements
+      currentAppStateRef.current = appState
+      
+      // Mark as dirty and save
+      setIsDirty(true)
+      saveToDb(mutableElements, appState)
+      
+      // Broadcast to other users (if using realtime)
+      // broadcastUpdate(mutableElements, appState)
+    },
+    [saveToDb]
+  )
   
   return (
     <div className="w-full h-screen">
       <Excalidraw
-        ref={excalidrawRef}
-        initialData={{
-          elements: initialElements,
-          appState: initialAppState,
+        // Use excalidrawAPI prop, not ref
+        excalidrawAPI={(api) => {
+          excalidrawRef.current = api
         }}
+        // Use ref value (set once, never updated)
+        initialData={initialDataRef.current || { elements: [], appState: {} }}
+        // onChange receives readonly arrays
         onChange={handleChange}
       />
     </div>
   )
 }
+
+// ❌ DON'T: Update state in onChange (causes infinite loops)
+const handleChange = (elements: any[], appState: any) => {
+  setElements(elements)  // ❌ This causes re-render → onChange → infinite loop
+  setAppState(appState)  // ❌ This causes re-render → onChange → infinite loop
+  saveToDb(elements, appState)
+}
+
+// ❌ DON'T: Pass state to initialData (causes re-initialization)
+<Excalidraw
+  initialData={{ elements, appState }}  // ❌ Updates cause re-init
+  onChange={handleChange}
+/>
+
+// ❌ DON'T: Use ref directly (Excalidraw doesn't support it)
+<Excalidraw ref={excalidrawRef} />  // ❌ Won't work
 ```
 
 ### Data Serialization
@@ -505,6 +563,81 @@ function loadBoardData(data: any) {
   // Fallback to empty canvas
   return { elements: [], appState: {} }
 }
+```
+
+### Excalidraw Type Safety
+
+- **Excalidraw types don't export correctly** - `ExcalidrawImperativeAPI` import fails in production builds
+- Use local type definitions or `any` for the API type
+- `onChange` receives `readonly` arrays - convert to mutable if needed
+
+```typescript
+// ✅ DO: Use local type definition or any
+// Type for Excalidraw API ref - using any since Excalidraw types aren't always exported correctly
+type ExcalidrawAPI = any
+
+// Or define minimal interface
+type ExcalidrawAPI = {
+  updateScene: (sceneData: { elements?: any[]; appState?: any }) => void
+  getSceneElementsIncludingDeleted: () => readonly any[]
+  [key: string]: any
+}
+
+// ❌ DON'T: Import types that don't work in production
+import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types/types'
+// This fails in production builds with: "Cannot find module '@excalidraw/excalidraw/types/types'"
+
+// ✅ DO: Handle readonly arrays from onChange
+const handleChange = useCallback(
+  (elements: readonly any[], appState: any, files?: any) => {
+    // Convert readonly to mutable if needed
+    const mutableElements = [...elements]
+    // Use mutableElements for your logic
+  },
+  []
+)
+```
+
+### Preventing Infinite Loops
+
+- **Never update state in `onChange`** - Causes infinite re-render loops in production
+- Use refs to track current values without triggering re-renders
+- `initialData` should be set once on mount, never updated from state
+
+```typescript
+// ✅ DO: Use refs to track values
+const currentElementsRef = useRef<any[]>([])
+const currentAppStateRef = useRef<any>({})
+
+const handleChange = useCallback((elements: readonly any[], appState: any) => {
+  // Update refs (no re-render)
+  currentElementsRef.current = [...elements]
+  currentAppStateRef.current = appState
+  
+  // Only update state for UI indicators
+  setIsDirty(true)
+  saveToDb([...elements], appState)
+}, [saveToDb])
+
+// ❌ DON'T: Update state in onChange
+const handleChange = (elements: any[], appState: any) => {
+  setElements(elements)  // ❌ Causes infinite loop
+  setAppState(appState)   // ❌ Causes infinite loop
+}
+
+// ✅ DO: Store initialData in ref (set once)
+const initialDataRef = useRef<{ elements: any[]; appState: any } | null>(null)
+
+useEffect(() => {
+  if (!initialDataRef.current) {
+    initialDataRef.current = { elements: initialElements, appState: initialAppState }
+  }
+}, []) // Empty deps - only set once
+
+<Excalidraw initialData={initialDataRef.current || { elements: [], appState: {} }} />
+
+// ❌ DON'T: Pass state to initialData
+<Excalidraw initialData={{ elements, appState }} />  // ❌ Updates cause re-init
 ```
 
 ## Error Handling Patterns
@@ -751,6 +884,7 @@ export type ActionResult<T> =
 - **Avoid `any`** except for Excalidraw types (they don't export proper types)
 - Use type guards for runtime validation
 - Leverage TypeScript strict mode
+- **Excalidraw types require special handling** - imports fail in production builds
 
 ```typescript
 // ✅ DO: Type guards
@@ -767,6 +901,19 @@ function isBoard(data: unknown): data is Board {
 
 // ❌ DON'T: Unchecked type assertions
 const board = data as Board  // Unsafe
+
+// ✅ DO: Handle Excalidraw types (they don't export correctly)
+// Use local type definition or any
+type ExcalidrawAPI = any
+
+// ❌ DON'T: Import Excalidraw types (fails in production)
+import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types/types'
+// Error: Cannot find module '@excalidraw/excalidraw/types/types'
+
+// ✅ DO: Handle readonly arrays from Excalidraw onChange
+const handleChange = (elements: readonly any[], appState: any) => {
+  const mutable = [...elements] // Convert if needed
+}
 ```
 
 ## Styling with Tailwind CSS
@@ -864,13 +1011,103 @@ test('displays board list', async () => {
 - **Debounce auto-save** (5 seconds) to avoid excessive writes
 - Use React.memo for expensive components
 - Optimize images with Next.js Image component (if used)
+- **CRITICAL**: Avoid infinite loops in Excalidraw onChange handlers
 
 ```typescript
 // ✅ DO: Memoize expensive components
 export const BoardCard = React.memo(function BoardCard({ board }: { board: Board }) {
   // Component implementation
 })
+
+// ⚠️ WARNING: Infinite Loop Prevention
+// Never update state in Excalidraw onChange - causes React error #185 in production
+// Use refs to track values instead of state updates
 ```
+
+## Production Build Testing
+
+- **Always test production builds locally** before deploying
+- Production builds expose issues that dev mode masks
+- React behavior differs between dev and production
+
+### Testing Production Builds Locally
+
+```bash
+# Build and test production build locally
+npm run build
+npm start
+
+# Test on http://localhost:3000
+```
+
+### Why Production Builds Matter
+
+- **Faster execution** exposes timing issues and infinite loops
+- **Optimized code** can surface race conditions
+- **Different error handling** - minified errors are harder to debug
+- **React Strict Mode** behaves differently in production
+- **No HMR** - state resets don't mask persistent issues
+
+### Common Production-Only Issues
+
+1. **Infinite loops** - State updates in callbacks cause loops in production
+2. **Type errors** - Type imports that work in dev fail in production builds
+3. **Timing issues** - Race conditions only appear with optimized code
+4. **Error boundaries** - Production error handling differs from dev
+
+### Debugging Production Builds
+
+```typescript
+// ✅ DO: Add console logs to track behavior
+const handleChange = useCallback((elements: readonly any[], appState: any) => {
+  console.log('onChange called', elements.length) // Track call frequency
+  // ... implementation
+}, [])
+
+// ✅ DO: Use React DevTools Profiler to detect excessive re-renders
+// ✅ DO: Monitor browser Performance tab for update loops
+```
+
+## Vercel Deployment Considerations
+
+### Environment Variables
+
+- **Set all required variables** in Vercel project settings
+- Use Production, Preview, and Development environments
+- Never commit `.env.local` to git
+
+```bash
+# Required environment variables in Vercel
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+NEXT_PUBLIC_SITE_URL=https://your-app.vercel.app
+```
+
+### Supabase Configuration
+
+- **Update redirect URLs** in Supabase Dashboard → Authentication → URL Configuration
+- Add production URL: `https://your-app.vercel.app/auth/callback`
+- Add preview pattern: `https://your-app-*.vercel.app/auth/callback`
+- Set Site URL to your production domain
+
+### Build Error Debugging
+
+- **Check build logs** in Vercel dashboard for TypeScript errors
+- **Common issues**:
+  - Missing environment variables
+  - Type imports that fail in production
+  - Infinite loop errors (React error #185)
+- **Test locally first**: `npm run build` before pushing
+
+### Deployment Checklist
+
+- [ ] All environment variables set in Vercel
+- [ ] Supabase redirect URLs configured
+- [ ] Production build succeeds locally (`npm run build`)
+- [ ] No TypeScript errors in build
+- [ ] Test authentication flow in production
+- [ ] Verify board creation/editing works
+- [ ] Check for infinite loops (React error #185)
 
 ## Environment Variables
 
