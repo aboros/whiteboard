@@ -62,20 +62,13 @@ npm install
    - Click **Run** (or press `Cmd/Ctrl + Enter`)
    - You should see "Success. No rows returned"
 
-4. **Enable Magic Link authentication**
-   - Go to **Authentication** → **Providers**
-   - Find **Email** in the list and click it
-   - Enable **Email** provider
-   - Under **Email Auth**, enable **Enable email confirmations** (optional, but recommended)
-   - Scroll down and click **Save**
-
-5. **Configure redirect URLs**
+4. **Configure redirect URLs**
    - Go to **Authentication** → **URL Configuration**
    - Under **Redirect URLs**, add:
      - `http://localhost:3000/auth/callback`
    - Click **Save**
 
-6. **Add a test user** (optional, for testing)
+5. **Add a test user** (optional, for testing)
    - Go to **Authentication** → **Users**
    - Click **Add user** → **Create new user**
    - Enter an email address (use your own for testing)
