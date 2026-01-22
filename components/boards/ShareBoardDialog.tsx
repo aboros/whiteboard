@@ -2,13 +2,14 @@
 
 import { useState, FormEvent, useEffect } from 'react'
 import { shareBoard, revokeBoardAccess, getSharedUsers, SharedUser, getBoard, setBoardPublicStatus, Board } from '@/lib/actions/boards'
-import { X } from 'lucide-react'
+import { X, Copy, Check } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 interface ShareBoardDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   boardId: string
+  boardSlug: string
 }
 
 function validateEmail(email: string): { valid: boolean; error?: string } {
@@ -27,6 +28,7 @@ export function ShareBoardDialog({
   open,
   onOpenChange,
   boardId,
+  boardSlug,
 }: ShareBoardDialogProps) {
   const [email, setEmail] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -38,7 +40,13 @@ export function ShareBoardDialog({
   const [isPublic, setIsPublic] = useState(false)
   const [isLoadingPublic, setIsLoadingPublic] = useState(false)
   const [isTogglingPublic, setIsTogglingPublic] = useState(false)
+  const [copied, setCopied] = useState(false)
   const router = useRouter()
+
+  // Generate public URL
+  const publicUrl = typeof window !== 'undefined' 
+    ? `${window.location.origin}/board/${boardSlug}`
+    : ''
 
   // Load board data and shared users when dialog opens
   useEffect(() => {
@@ -150,11 +158,25 @@ export function ShareBoardDialog({
     router.refresh()
   }
 
+  const handleCopyUrl = async () => {
+    if (publicUrl) {
+      try {
+        await navigator.clipboard.writeText(publicUrl)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      } catch (err) {
+        console.error('Failed to copy URL:', err)
+        setError('Failed to copy URL. Please copy it manually.')
+      }
+    }
+  }
+
   const handleClose = () => {
     if (!isSubmitting && !isRevoking) {
       setEmail('')
       setError(null)
       setWarning(null)
+      setCopied(false)
       onOpenChange(false)
     }
   }
@@ -233,7 +255,7 @@ export function ShareBoardDialog({
 
         {/* Public Access Toggle */}
         <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-3">
             <div className="flex-1">
               <label
                 htmlFor="public-toggle"
@@ -263,6 +285,43 @@ export function ShareBoardDialog({
               </label>
             )}
           </div>
+
+          {/* Public URL Display */}
+          {isPublic && publicUrl && (
+            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Public Link
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={publicUrl}
+                  readOnly
+                  className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                />
+                <button
+                  onClick={handleCopyUrl}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                  aria-label="Copy public URL"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      <span>Copy</span>
+                    </>
+                  )}
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                Anyone with this link can view the board (read-only)
+              </p>
+            </div>
+          )}
         </div>
 
         <div>

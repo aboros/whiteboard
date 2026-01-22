@@ -98,19 +98,13 @@ export function BoardCard({ board, onDelete, isOwner }: BoardCardProps) {
       <div className="group relative bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow duration-200">
         <Link
           href={`/board/${board.slug}`}
-          className="block p-6 h-full"
+          className="block p-4 h-full"
         >
           <div className="flex items-start justify-between mb-3">
             <div className="flex-1 flex items-start gap-2">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-2 flex-1">
                 {board.name}
               </h3>
-              {board.is_public && (
-                <div className="flex items-center gap-1 mt-0.5 px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-xs font-medium">
-                  <Globe className="w-3 h-3" />
-                  <span>Public</span>
-                </div>
-              )}
             </div>
             <div className="ml-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               {isOwnerState && (
@@ -133,6 +127,12 @@ export function BoardCard({ board, onDelete, isOwner }: BoardCardProps) {
               )}
             </div>
           </div>
+          {board.is_public && (
+            <div className="flex justify-end items-center text-sm text-blue-600 dark:text-blue-400">
+              <Globe className="w-4 h-4 mr-1 text-blue-600 dark:text-blue-400" />
+              <span>Public</span>
+            </div>
+          )}
 
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -140,17 +140,11 @@ export function BoardCard({ board, onDelete, isOwner }: BoardCardProps) {
                 <Calendar className="w-4 h-4 mr-1.5" />
                 <span>Updated {formatDate(board.updated_at)}</span>
               </div>
-              {board.is_public && (
-                <div className="flex items-center text-xs text-blue-600 dark:text-blue-400">
-                  <Globe className="w-3 h-3 mr-1" />
-                  <span>Public</span>
-                </div>
-              )}
             </div>
-            {isOwnerState && shareCount !== null && shareCount > 0 && (
+            {(shareCount !== null && shareCount > 0) && (
               <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
                 <Users className="w-4 h-4 mr-1" />
-                <span>{shareCount} {shareCount === 1 ? 'person' : 'people'}</span>
+                <span>Shared with {shareCount}</span>
               </div>
             )}
           </div>
@@ -166,6 +160,7 @@ export function BoardCard({ board, onDelete, isOwner }: BoardCardProps) {
       {isOwnerState && (
         <ShareBoardDialog
           boardId={board.id}
+          boardSlug={board.slug}
           open={showShareDialog}
           onOpenChange={setShowShareDialog}
         />

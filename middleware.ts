@@ -20,8 +20,11 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith(path)
   )
 
+  // Board routes can be accessed anonymously (page will check if board is public)
+  const isBoardRoute = request.nextUrl.pathname.startsWith('/board/')
+
   // If user is not authenticated and trying to access protected route
-  if (!user && !isPublicPath) {
+  if (!user && !isPublicPath && !isBoardRoute) {
     const redirectUrl = new URL('/login', request.url)
     // Preserve the intended destination for redirect after login
     redirectUrl.searchParams.set('next', request.nextUrl.pathname)
